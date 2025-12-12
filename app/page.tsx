@@ -129,7 +129,7 @@ export default function Home() {
                                     WEEKLY <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-600 to-pink-600">SCHEDULE</span>
                                 </h1>
                             </Link>
-                            <p className="text-gray-700 font-medium drop-shadow">최가네 이번주 방송 일정안내 (클릭하여 전체 일정 보기)</p>
+                            <p className="text-gray-700 font-medium drop-shadow">팀진우 이번주 방송 일정안내 (클릭하여 전체 일정 보기)</p>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-7 gap-4 max-w-6xl mx-auto">
