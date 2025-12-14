@@ -41,15 +41,20 @@ export async function crawlNotices(): Promise<Notice[]> {
 
         browser = await chromium.launch({
             headless: true,
-            args: ['--disable-http2', '--no-sandbox', '--disable-setuid-sandbox']
+            args: [
+                '--disable-http2',
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage', // Critical for Docker/Railway
+                '--disable-gpu'
+            ]
         });
 
         // Cookies removed to prevent session mismatch on Railway environment
         const cookies: any[] = [];
 
-        // [속도 향상] 배치 사이즈를 1 -> 5로 증가시켜 5명씩 동시 크롤링
-        // 리소스 차단 덕분에 병렬 처리 시에도 안정적임
-        const batchSize = 5;
+        // [안정성 향상] 메모리 부족 방지를 위해 배치 사이즈를 1로 감소 (Railway 환경 최적화)
+        const batchSize = 1;
         for (let i = 0; i < streamers.length; i += batchSize) {
             const batch = streamers.slice(i, i + batchSize);
 
