@@ -44,27 +44,8 @@ export async function crawlNotices(): Promise<Notice[]> {
             args: ['--disable-http2', '--no-sandbox', '--disable-setuid-sandbox']
         });
 
-        let cookies: any[] = [];
-        try {
-            const cookieFile = path.join(process.cwd(), 'data', 'soop-cookies.json');
-            const cookieData = await fs.readFile(cookieFile, 'utf-8');
-            const rawCookies = JSON.parse(cookieData);
-
-            cookies = rawCookies.filter((c: any) => {
-                if (typeof c.value !== 'string') return false;
-                return /^[\x00-\xFF]*$/.test(c.value);
-            }).map((c: any) => {
-                return {
-                    name: c.name,
-                    value: c.value,
-                    domain: c.domain,
-                    path: c.path || '/',
-                };
-            });
-            console.log(`[Notice Crawler] Loaded ${cookies.length} valid cookies.`);
-        } catch (e) {
-            console.log('[Notice Crawler] Failed to load cookies:', e);
-        }
+        // Cookies removed to prevent session mismatch on Railway environment
+        const cookies: any[] = [];
 
         // [속도 향상] 배치 사이즈를 1 -> 5로 증가시켜 5명씩 동시 크롤링
         // 리소스 차단 덕분에 병렬 처리 시에도 안정적임
