@@ -50,8 +50,30 @@ export async function crawlNotices(): Promise<Notice[]> {
             ]
         });
 
-        // Cookies removed to prevent session mismatch on Railway environment
-        const cookies: any[] = [];
+        // Try to load cookies from file
+        let cookies: any[] = [];
+        try {
+            const cookiePath = path.join(process.cwd(), 'data', 'soop-cookies.json');
+            const cookieData = await fs.readFile(cookiePath, 'utf-8');
+            const parsedCookies = JSON.parse(cookieData);
+
+            // Sanitize cookies for Puppeteer
+            cookies = parsedCookies.map((cookie: any) => {
+                // Remove fields that might cause issues with Puppeteer
+                const { sameSite, ...rest } = cookie;
+                return {
+                    ...rest,
+                    // Ensure domain is correct for all subdomains
+                    domain: '.sooplive.co.kr',
+                    path: '/',
+                    // Ensure secure is true for https
+                    secure: true
+                };
+            });
+            console.log(`[Notice Crawler] Loaded and sanitized ${cookies.length} cookies.`);
+        } catch (e) {
+            console.log('[Notice Crawler] No cookie file found or failed to load. Crawling as guest.');
+        }
 
         // [안정성 향상] 메모리 부족 방지를 위해 배치 사이즈를 1로 감소 (Railway 환경 최적화)
         const batchSize = 1;

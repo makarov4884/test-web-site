@@ -66,6 +66,8 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
             const res = await verifyStationContent(id);
             if (res.success) {
                 onLoginSuccess(id);
+                // Reload to reflect auth state everywhere immediately
+                window.location.reload();
                 onClose();
             } else {
                 setError(res.message || "인증 실패");
