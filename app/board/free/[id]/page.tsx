@@ -80,7 +80,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
             return;
         }
 
-        const result = await addComment(id, user.nickname || user.id, commentText, user.profile_image);
+        const result = await addComment(id, user.nickname || user.id, commentText, user.profile_image, user.id);
         if (result.success && result.comment && post) {
             setPost({ ...post, comments: [...post.comments, result.comment] });
             setCommentText("");
@@ -208,6 +208,11 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
         );
     }
 
+    // Check if current user is author
+    const isAuthor = user && post && (
+        (post.authorId ? user.id === post.authorId : (user.nickname === post.author || user.id === post.author))
+    );
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-pink-50 to-purple-50 flex flex-col font-sans">
             <Header />
@@ -237,7 +242,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                             <>
                                 <div className="flex items-start justify-between mb-4">
                                     <h1 className="text-3xl font-bold flex-1 text-gray-800">{post.title}</h1>
-                                    {user && (user.nickname === post.author || user.id === post.author) && (
+                                    {isAuthor && (
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={handleEditPost}
@@ -260,7 +265,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                                     <div className="flex items-center gap-2">
                                         {post.authorProfileImage ? (
                                             <img src={post.authorProfileImage} alt="Profile" className="w-6 h-6 rounded-full object-cover border border-gray-200" />
-                                        ) : (user && (user.nickname === post.author || user.id === post.author) && user.profile_image) ? (
+                                        ) : (isAuthor && user?.profile_image) ? (
                                             <img src={user.profile_image} alt="Profile" className="w-6 h-6 rounded-full object-cover border border-gray-200" />
                                         ) : (
                                             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-pink-400 to-purple-400 flex items-center justify-center text-white text-xs font-bold">
@@ -436,7 +441,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                                                 </div>
                                                 <p className="text-gray-700 leading-relaxed">{comment.content}</p>
                                             </div>
-                                            {user && (user.nickname === comment.author || user.id === comment.author) && (
+                                            {user && ((comment.authorId && user.id === comment.authorId) || (!comment.authorId && (user.nickname === comment.author || user.id === comment.author))) && (
                                                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                                     <button
                                                         onClick={() => handleEditComment(comment.id, comment.content)}

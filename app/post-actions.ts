@@ -43,7 +43,7 @@ export async function toggleLike(postId: string, userId: string): Promise<{ succ
 }
 
 // Add comment to a post
-export async function addComment(postId: string, author: string, content: string, authorProfileImage?: string): Promise<{ success: boolean; comment?: Comment }> {
+export async function addComment(postId: string, author: string, content: string, authorProfileImage?: string, authorId?: string): Promise<{ success: boolean; comment?: Comment }> {
     if (!content.trim()) {
         return { success: false };
     }
@@ -59,6 +59,7 @@ export async function addComment(postId: string, author: string, content: string
     const newComment: Comment = {
         id: Date.now().toString(),
         author,
+        authorId,
         authorProfileImage, // 추가
         content,
         date: `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`

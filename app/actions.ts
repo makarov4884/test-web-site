@@ -113,6 +113,7 @@ const POSTS_DB_PATH = path.join(process.cwd(), 'data', 'posts.json');
 export interface Comment {
     id: string;
     author: string;
+    authorId?: string; // Add authorId
     authorProfileImage?: string;
     content: string;
     date: string;
@@ -122,6 +123,7 @@ export interface Post {
     id: string;
     title: string;
     author: string;
+    authorId?: string; // Add authorId
     authorProfileImage?: string;
     content: string;
     image?: string; // Base64 encoded image or URL

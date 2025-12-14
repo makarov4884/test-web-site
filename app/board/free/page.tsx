@@ -62,6 +62,7 @@ export default function FreeBoardPage() {
         await addPost({
             title,
             author,
+            authorId: user?.id,
             authorProfileImage: user?.profile_image,
             content,
             image,

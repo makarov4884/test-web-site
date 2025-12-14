@@ -107,6 +107,7 @@ export async function crawlNotices(): Promise<Notice[]> {
                         while (retries > 0 && !success) {
                             try {
                                 await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+                                await page.waitForTimeout(2000); // Wait for hydration
                                 success = true;
                             } catch (e: any) {
                                 retries--;
@@ -123,14 +124,29 @@ export async function crawlNotices(): Promise<Notice[]> {
 
                         try {
                             // Wait for any list item to appear
-                            const itemSelector = 'li[class*="Post_"]';
+                            // Primary selector for main feed: li[class*="Post_"]
+                            // Secondary selector for specific board: li (generic) or li[class*="List_"]
+                            const isBoardUrl = url.includes('/board/');
+                            let itemSelector = 'li[class*="Post_"]';
+
+                            if (isBoardUrl) {
+                                // Specific board pages might have different structure
+                                itemSelector = 'div[class*="List_"] li, li[class*="Post_"]';
+                            }
 
                             try {
                                 // Fallback wait for ul if li not found immediately
                                 await page.waitForSelector(itemSelector, { state: 'attached', timeout: 10000 });
                             } catch (e) {
-                                console.log(`[Notice Crawler] List not found for ${streamer.name} at ${url}`);
-                                continue;
+                                console.log(`[Notice Crawler] Primary selector failed, trying fallback for ${streamer.name}...`);
+                                // Try generic fallback including table rows
+                                itemSelector = 'li, tr';
+                                try {
+                                    await page.waitForSelector('li, tr', { state: 'attached', timeout: 5000 });
+                                } catch (e2) {
+                                    console.log(`[Notice Crawler] List not found for ${streamer.name} at ${url}`);
+                                    continue;
+                                }
                             }
 
                             const extracted = await page.evaluate(({ itemSelector, streamerId, streamerName }) => {
@@ -138,11 +154,26 @@ export async function crawlNotices(): Promise<Notice[]> {
                                 const listItems = document.querySelectorAll(itemSelector as string);
                                 const now = new Date();
 
-                                listItems.forEach((li, idx) => {
-                                    const titleEl = li.querySelector('[class*="ContentTitle_title"]');
-                                    const contentEl = li.querySelector('[class*="Content_text"]');
-                                    const dateContainer = li.querySelector('[class*="Interaction_details"]');
-                                    const linkEl = li.querySelector('a[href*="/station/"]');
+                                listItems.forEach((el, idx) => {
+                                    let titleEl = el.querySelector('[class*="ContentTitle_title"]');
+                                    let contentEl = el.querySelector('[class*="Content_text"]');
+                                    let dateContainer = el.querySelector('[class*="Interaction_details"]');
+                                    let linkEl = el.querySelector('a[href*="/station/"]') as HTMLAnchorElement | null;
+
+                                    // Table Row specific logic (Old Board Style)
+                                    if (el.tagName.toLowerCase() === 'tr') {
+                                        const subjectLink = el.querySelector('a') as HTMLAnchorElement | null;
+                                        if (subjectLink) {
+                                            titleEl = subjectLink;
+                                            linkEl = subjectLink;
+                                            // Date usually in 3rd or 4th cell
+                                            const cells = el.querySelectorAll('td');
+                                            if (cells.length > 2) {
+                                                const dateText = cells[2]?.textContent || cells[3]?.textContent;
+                                                if (dateText) dateContainer = { textContent: dateText } as any;
+                                            }
+                                        }
+                                    }
 
                                     if (titleEl && linkEl) {
                                         let title = titleEl.textContent || '';
@@ -158,12 +189,37 @@ export async function crawlNotices(): Promise<Notice[]> {
                                             const dateMatch = rawDate.match(/(\d{4})[-.](\d{2})[-.](\d{2})/);
                                             if (dateMatch) {
                                                 date = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`; // Normalize to YYYY-MM-DD
-                                            } else if (rawDate.match(/\d{2}:\d{2}/) || rawDate.includes('분 전') || rawDate.includes('초 전') || rawDate.includes('방금')) {
-                                                // 2. Relative time or Time format -> Today
+                                            } else {
+                                                // Relative time handling
                                                 const y = now.getFullYear();
                                                 const m = String(now.getMonth() + 1).padStart(2, '0');
                                                 const d = String(now.getDate()).padStart(2, '0');
-                                                date = `${y}-${m}-${d}`;
+
+                                                if (rawDate.match(/\d{2}:\d{2}/) || rawDate.includes('분 전') || rawDate.includes('초 전') || rawDate.includes('방금') || rawDate.includes('시간 전')) {
+                                                    // Today
+                                                    date = `${y}-${m}-${d}`;
+                                                } else if (rawDate.includes('어제')) {
+                                                    // Yesterday
+                                                    const yesterday = new Date(now);
+                                                    yesterday.setDate(now.getDate() - 1);
+                                                    const ym = String(yesterday.getMonth() + 1).padStart(2, '0');
+                                                    const yd = String(yesterday.getDate()).padStart(2, '0');
+                                                    date = `${yesterday.getFullYear()}-${ym}-${yd}`;
+                                                } else if (rawDate.includes('일 전')) {
+                                                    // N days ago
+                                                    const daysMatch = rawDate.match(/(\d+)일 전/);
+                                                    if (daysMatch) {
+                                                        const daysAgo = parseInt(daysMatch[1], 10);
+                                                        const pastDate = new Date(now);
+                                                        pastDate.setDate(now.getDate() - daysAgo);
+                                                        const pm = String(pastDate.getMonth() + 1).padStart(2, '0');
+                                                        const pd = String(pastDate.getDate()).padStart(2, '0');
+                                                        date = `${pastDate.getFullYear()}-${pm}-${pd}`;
+                                                    } else {
+                                                        // Fallback to today if parsing fails but format detected
+                                                        date = `${y}-${m}-${d}`;
+                                                    }
+                                                }
                                             }
                                         }
 
@@ -215,9 +271,12 @@ export async function crawlNotices(): Promise<Notice[]> {
     }
 
     return allNotices.sort((a, b) => {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        return dateB - dateA;
+        const timeA = new Date(a.date).getTime();
+        const timeB = new Date(b.date).getTime();
+        // Handle Invalid Date (NaN)
+        const valA = isNaN(timeA) ? 0 : timeA;
+        const valB = isNaN(timeB) ? 0 : timeB;
+        return valB - valA;
     });
 }
 

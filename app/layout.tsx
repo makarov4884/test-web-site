@@ -18,6 +18,7 @@ export const metadata: Metadata = {
 };
 
 import SmoothHorizontalScroll from "@/components/SmoothHorizontalScroll";
+import SeasonalEffects from "@/components/SeasonalEffects";
 
 export default function RootLayout({
   children,
@@ -29,6 +30,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <SeasonalEffects />
         <SmoothHorizontalScroll />
         {children}
       </body>

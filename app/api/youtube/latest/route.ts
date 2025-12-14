@@ -79,11 +79,22 @@ export async function GET(request: Request) {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('YouTube API Error Response:', response.status, errorText);
+
+            // If Quota Exceeded (403), return stale cache if available or empty
+            if (response.status === 403) {
+                if (cached) {
+                    console.log('Returning stale cached data due to API quota limit:', channelId);
+                    return NextResponse.json(cached.data);
+                }
+                // Return empty object gracefully instead of failure
+                return NextResponse.json({ error: 'YouTube API Quota Exceeded', videoId: null });
+            }
+
             throw new Error(`Failed to fetch from YouTube API: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('YouTube API Response:', JSON.stringify(data, null, 2));
+        // console.log('YouTube API Response:', JSON.stringify(data, null, 2));
 
         if (!data.items || data.items.length === 0) {
             return NextResponse.json({ error: 'No videos found' }, { status: 404 });
@@ -94,26 +105,22 @@ export async function GET(request: Request) {
         const thumbnail = latestVideo.snippet.thumbnails.high.url;
         const title = latestVideo.snippet.title;
 
-        // Get channel profile image
-        const channelInfoResponse = await fetch(
-            `https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&id=${channelId}&part=snippet`
-        );
-
+        // Get channel profile image (Only if quota permits, otherwise skip or handle error)
         let channelProfileImage = '';
-        if (channelInfoResponse.ok) {
-            const channelInfo = await channelInfoResponse.json();
-            if (channelInfo.items && channelInfo.items.length > 0) {
-                channelProfileImage = channelInfo.items[0].snippet.thumbnails.default.url;
-            }
-        }
+        try {
+            const channelInfoResponse = await fetch(
+                `https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&id=${channelId}&part=snippet`
+            );
 
-        return NextResponse.json({
-            videoId,
-            thumbnail,
-            title,
-            channelProfileImage,
-            url: `https://www.youtube.com/watch?v=${videoId}`
-        });
+            if (channelInfoResponse.ok) {
+                const channelInfo = await channelInfoResponse.json();
+                if (channelInfo.items && channelInfo.items.length > 0) {
+                    channelProfileImage = channelInfo.items[0].snippet.thumbnails.default.url;
+                }
+            }
+        } catch (e) {
+            console.log('Failed to fetch channel icon, ignoring:', e);
+        }
 
         const responseData = {
             videoId,
@@ -130,6 +137,13 @@ export async function GET(request: Request) {
 
     } catch (error: any) {
         console.error('YouTube API Error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+
+        // Fallback: if cached exists, return it even if expired during error
+        const cached = cache.get(`channel_${channelId}`);
+        if (cached) {
+            return NextResponse.json(cached.data);
+        }
+
+        return NextResponse.json({ error: error.message, videoId: null }, { status: 200 }); // Return 200 with null valid to avoid UI crash
     }
 }
