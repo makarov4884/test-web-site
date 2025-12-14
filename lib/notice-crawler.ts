@@ -106,7 +106,7 @@ export async function crawlNotices(): Promise<Notice[]> {
 
                         while (retries > 0 && !success) {
                             try {
-                                await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+                                await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
                                 success = true;
                             } catch (e: any) {
                                 retries--;
@@ -122,11 +122,11 @@ export async function crawlNotices(): Promise<Notice[]> {
                         if (!success) continue;
 
                         try {
-                            await page.waitForTimeout(2000);
-
-                            const itemSelector = 'li[class*="Post_post"]';
+                            // Wait for any list item to appear
+                            const itemSelector = 'li[class*="Post_"]';
 
                             try {
+                                // Fallback wait for ul if li not found immediately
                                 await page.waitForSelector(itemSelector, { state: 'attached', timeout: 10000 });
                             } catch (e) {
                                 console.log(`[Notice Crawler] List not found for ${streamer.name} at ${url}`);
@@ -136,6 +136,7 @@ export async function crawlNotices(): Promise<Notice[]> {
                             const extracted = await page.evaluate(({ itemSelector, streamerId, streamerName }) => {
                                 const items: any[] = [];
                                 const listItems = document.querySelectorAll(itemSelector as string);
+                                const now = new Date();
 
                                 listItems.forEach((li, idx) => {
                                     const titleEl = li.querySelector('[class*="ContentTitle_title"]');
@@ -151,10 +152,18 @@ export async function crawlNotices(): Promise<Notice[]> {
 
                                         let date = '';
                                         if (dateContainer) {
-                                            date = dateContainer.textContent?.trim() || '';
-                                            const dateMatch = date.match(/\d{4}-\d{2}-\d{2}/);
+                                            const rawDate = dateContainer.textContent?.trim() || '';
+
+                                            // 1. YYYY-MM-DD or YYYY.MM.DD
+                                            const dateMatch = rawDate.match(/(\d{4})[-.](\d{2})[-.](\d{2})/);
                                             if (dateMatch) {
-                                                date = dateMatch[0];
+                                                date = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`; // Normalize to YYYY-MM-DD
+                                            } else if (rawDate.match(/\d{2}:\d{2}/) || rawDate.includes('분 전') || rawDate.includes('초 전') || rawDate.includes('방금')) {
+                                                // 2. Relative time or Time format -> Today
+                                                const y = now.getFullYear();
+                                                const m = String(now.getMonth() + 1).padStart(2, '0');
+                                                const d = String(now.getDate()).padStart(2, '0');
+                                                date = `${y}-${m}-${d}`;
                                             }
                                         }
 
