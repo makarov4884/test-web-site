@@ -165,3 +165,39 @@ body {
       rgba(255, 192, 216, 0.3) 100%);
   pointer-events: none;
 }
+
+/* --- Custom Scrollbar Styling (Pink/Purple Theme) --- */
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(244, 114, 182, 0.4); /* Pink-400 with opacity */
+  border-radius: 9999px;
+  border: 3px solid transparent; /* Creates space around thumb */
+  background-clip: content-box;
+  transition: background-color 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(236, 72, 153, 0.8); /* Pink-500 stronger on hover */
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 114, 182, 0.4) transparent;
+}

@@ -1,6 +1,6 @@
 export default function Footer() {
     return (
-        <footer className="w-full border-t border-pink-200/30 bg-gradient-to-b from-white to-pink-50/30 py-12 mt-20">
+        <footer className="w-full border-t border-pink-200/30 bg-white/50 backdrop-blur-sm py-12 mt-20">
             <div className="container mx-auto px-4 grid grid-cols-2 md:grid-cols-3 gap-8">
                 <div className="space-y-4">
                     <h3 className="text-lg font-bold bg-gradient-to-r from-cyan-500 to-pink-500 bg-clip-text text-transparent">Team Jinu</h3>

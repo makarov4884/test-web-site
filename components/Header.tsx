@@ -89,13 +89,13 @@ export default function Header() {
         { name: '멤버', href: '/member' },
         { name: '방송일정', href: '/schedule' },
         { name: '자유 게시판', href: '/board/free' },
-        { name: '랭킹', href: '/ranking' },
+        { name: '페스티벌', href: '/festival' },
         { name: '공지사항', href: '/notice' },
         { name: '시그니처', href: '/signature' },
     ];
 
     return (
-        <header className="sticky top-0 z-50 w-full border-b border-pink-200/30 bg-white/80 backdrop-blur-md supports-[backdrop-filter]:bg-white/60">
+        <header className="sticky top-0 z-50 w-full border-b border-pink-200/30 bg-white/70 backdrop-blur-md supports-[backdrop-filter]:bg-white/50">
             <div className="container mx-auto px-4 h-16 flex items-center justify-between">
                 {/* Logo */}
                 <div className="flex items-center gap-4">

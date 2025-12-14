@@ -33,71 +33,50 @@ export async function verifyStationContent(id: string): Promise<{ success: boole
         return { success: false, message: "인증번호가 만료되었거나 발급되지 않았습니다." };
     }
 
-    let browser;
     try {
-        // Dynamic import puppeteer (only loads when needed)
-        const puppeteer = await import('puppeteer');
+        console.log(`[Verification] Fetching station info for: ${id}`);
 
-        // Launch headless browser
-        browser = await puppeteer.default.launch({
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--disable-gpu'
-            ]
+        // Use Fetch instead of Puppeteer for much faster verification
+        const response = await fetch(`https://bjapi.afreecatv.com/api/${id}/station`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://bj.afreecatv.com/'
+            },
+            cache: 'no-store'
         });
 
-        const page = await browser.newPage();
-
-        // Set user agent to avoid detection
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-        // Navigate to station page (try new SOOP domain first)
-        const url = `https://bj.afreecatv.com/${id}`;
-        console.log(`[Verification] Navigating to: ${url}`);
-
-        const response = await page.goto(url, {
-            waitUntil: 'networkidle2',
-            timeout: 15000
-        });
-
-        if (!response || response.status() === 404) {
-            await browser.close();
-            return { success: false, message: "존재하지 않는 방송국입니다." };
+        if (!response.ok) {
+            return { success: false, message: "존재하지 않는 방송국이거나 정보를 가져올 수 없습니다." };
         }
 
-        // Wait a bit for dynamic content to load
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        const data = await response.json();
 
-        // Extract all text content from the page
-        const pageText = await page.evaluate(() => document.body.innerText);
+        // Check relevant fields (Title, Name, Nickname, Profile Text)
+        const stationTitle = data.station?.station_title || "";
+        const stationName = data.station?.station_name || "";
+        const userNick = data.station?.user_nick || "";
+        const profileText = data.station?.display?.profile_text || "";
 
-        console.log(`[Verification] Page text length: ${pageText.length}`);
-        console.log(`[Verification] Looking for code: ${code}`);
+        console.log(`[Verification] Checking code "${code}" in:`);
+        console.log(` - Title: "${stationTitle}"`);
+        console.log(` - Name: "${stationName}"`);
+        console.log(` - Nick: "${userNick}"`);
+        console.log(` - Profile: "${profileText}"`);
 
-        // Check if verification code exists in the page
-        if (pageText.includes(code)) {
+        if (stationTitle.includes(code) || stationName.includes(code) || userNick.includes(code) || profileText.includes(code)) {
             console.log(`[Verification] ✅ Code found!`);
-            await browser.close();
             await createSession(id);
             return { success: true };
         }
 
         console.log(`[Verification] ❌ Code not found`);
-        await browser.close();
         return {
             success: false,
-            message: "방송국 페이지에서 인증번호를 찾을 수 없습니다. 방송국명 또는 소개글에 코드를 작성했는지 확인해주세요."
+            message: "방송국 '제목', '방송국명', '닉네임', 또는 '소개글(Profile)'에서 인증번호를 찾을 수 없습니다. 정확히 입력했는지 확인해주세요."
         };
 
     } catch (e: any) {
         console.error("Verification Error:", e);
-        if (browser) {
-            await browser.close();
-        }
         return {
             success: false,
             message: `인증 확인 중 오류가 발생했습니다: ${e.message}`
@@ -156,11 +135,17 @@ export async function getSession(): Promise<UserSession | null> {
 
             if (response.ok) {
                 const data = await response.json();
-                if (data.station?.station_name) {
+                if (data.station?.user_nick) {
+                    nickname = data.station.user_nick;
+                } else if (data.station?.station_name) {
                     nickname = data.station.station_name;
                 }
                 if (data.profile_image) {
                     profile_image = data.profile_image;
+                    // Ensure protocol is present
+                    if (profile_image.startsWith("//")) {
+                        profile_image = `https:${profile_image}`;
+                    }
                 }
             }
         } catch (e) {

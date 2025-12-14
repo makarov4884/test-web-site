@@ -14,6 +14,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     const { id } = use(params);
     const [post, setPost] = useState<Post | null>(null);
     const [user, setUser] = useState<UserSession | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
     const [commentText, setCommentText] = useState("");
     const [isLiked, setIsLiked] = useState(false);
 
@@ -45,6 +46,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                     setIsLiked(foundPost.likes?.includes(session.id) || false);
                 }
             }
+            setIsLoading(false);
         };
 
         fetchData();
@@ -78,7 +80,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
             return;
         }
 
-        const result = await addComment(id, user.nickname || user.id, commentText);
+        const result = await addComment(id, user.nickname || user.id, commentText, user.profile_image);
         if (result.success && result.comment && post) {
             setPost({ ...post, comments: [...post.comments, result.comment] });
             setCommentText("");
@@ -155,6 +157,45 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
         }
     };
 
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-pink-50 to-purple-50 flex flex-col font-sans">
+                <Header />
+                <main className="flex-1 flex items-center justify-center">
+                    <div className="animate-pulse flex flex-col items-center gap-4">
+                        <div className="w-12 h-12 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin"></div>
+                        <div className="text-pink-500 font-bold">로딩 중...</div>
+                    </div>
+                </main>
+                <Footer />
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-pink-50 to-purple-50 flex flex-col font-sans">
+                <Header />
+                <main className="flex-1 container mx-auto px-4 py-12 max-w-5xl flex items-center justify-center">
+                    <div className="text-center p-10 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-pink-200 animate-in zoom-in-95 duration-300 max-w-md w-full">
+                        <div className="w-20 h-20 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <FaCommentAlt className="text-pink-500 w-8 h-8" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-800 mb-3">로그인이 필요한 공간이에요!</h2>
+                        <p className="text-gray-600 mb-8 leading-relaxed">
+                            이 게시글을 확인하려면<br />
+                            로그인이 필요합니다.
+                        </p>
+                        <div className="text-sm text-pink-500 font-medium bg-pink-50 px-4 py-3 rounded-xl border border-pink-100 inline-block">
+                            ↗️ 우측 상단 <b>로그인</b> 버튼을 눌러주세요
+                        </div>
+                    </div>
+                </main>
+                <Footer />
+            </div>
+        );
+    }
+
     if (!post) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-pink-50 to-purple-50 flex flex-col font-sans">
@@ -217,8 +258,10 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                                 </div>
                                 <div className="flex items-center gap-4 text-sm text-gray-500">
                                     <div className="flex items-center gap-2">
-                                        {user?.profile_image ? (
-                                            <img src={user.profile_image} alt="Profile" className="w-6 h-6 rounded-full" />
+                                        {post.authorProfileImage ? (
+                                            <img src={post.authorProfileImage} alt="Profile" className="w-6 h-6 rounded-full object-cover border border-gray-200" />
+                                        ) : (user && (user.nickname === post.author || user.id === post.author) && user.profile_image) ? (
+                                            <img src={user.profile_image} alt="Profile" className="w-6 h-6 rounded-full object-cover border border-gray-200" />
                                         ) : (
                                             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-pink-400 to-purple-400 flex items-center justify-center text-white text-xs font-bold">
                                                 {post.author.charAt(0).toUpperCase()}
@@ -376,8 +419,10 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                                     ) : (
                                         <div className="flex items-start gap-3">
                                             <div className="shrink-0">
-                                                {user?.profile_image && (user.nickname === comment.author || user.id === comment.author) ? (
-                                                    <img src={user.profile_image} alt="Profile" className="w-8 h-8 rounded-full" />
+                                                {comment.authorProfileImage ? (
+                                                    <img src={comment.authorProfileImage} alt="Profile" className="w-8 h-8 rounded-full object-cover border border-gray-200" />
+                                                ) : (user && (user.nickname === comment.author || user.id === comment.author) && user.profile_image) ? (
+                                                    <img src={user.profile_image} alt="Profile" className="w-8 h-8 rounded-full object-cover border border-gray-200" />
                                                 ) : (
                                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-400 flex items-center justify-center text-white text-sm font-bold">
                                                         {comment.author.charAt(0).toUpperCase()}

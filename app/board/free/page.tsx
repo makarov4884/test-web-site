@@ -16,6 +16,8 @@ export default function FreeBoardPage() {
     const [posts, setPosts] = useState<Post[]>([]);
     const [isWriting, setIsWriting] = useState(false);
     const [user, setUser] = useState<UserSession | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState(""); // 검색어 state
 
     // Write Form State
     const [title, setTitle] = useState("");
@@ -40,14 +42,15 @@ export default function FreeBoardPage() {
     };
 
     useEffect(() => {
-        fetchPosts();
         // Fetch user session
         getSession().then(session => {
             setUser(session);
             if (session?.nickname) {
                 setAuthor(session.nickname);
             }
+            setIsLoading(false);
         });
+        fetchPosts();
     }, []);
 
     const handleSubmit = async () => {
@@ -59,6 +62,7 @@ export default function FreeBoardPage() {
         await addPost({
             title,
             author,
+            authorProfileImage: user?.profile_image,
             content,
             image,
         });
@@ -78,21 +82,81 @@ export default function FreeBoardPage() {
         }
     };
 
+    const filteredPosts = posts.filter(post =>
+        post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        post.author.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-pink-50 to-purple-50 flex flex-col font-sans">
+                <Header />
+                <main className="flex-1 flex items-center justify-center">
+                    <div className="animate-pulse flex flex-col items-center gap-4">
+                        <div className="w-12 h-12 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin"></div>
+                        <div className="text-pink-500 font-bold">로딩 중...</div>
+                    </div>
+                </main>
+                <Footer />
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-pink-50 to-purple-50 flex flex-col font-sans">
+                <Header />
+                <main className="flex-1 container mx-auto px-4 py-12 max-w-5xl flex items-center justify-center">
+                    <div className="text-center p-10 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-pink-200 animate-in zoom-in-95 duration-300 max-w-md w-full">
+                        <div className="w-20 h-20 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <FaCommentAlt className="text-pink-500 w-8 h-8" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-800 mb-3">로그인이 필요한 공간이에요!</h2>
+                        <p className="text-gray-600 mb-8 leading-relaxed">
+                            자유게시판에서 다양한 이야기를 나누려면<br />
+                            로그인이 필요합니다.
+                        </p>
+                        <div className="text-sm text-pink-500 font-medium bg-pink-50 px-4 py-3 rounded-xl border border-pink-100 inline-block">
+                            ↗️ 우측 상단 <b>로그인</b> 버튼을 눌러주세요
+                        </div>
+                    </div>
+                </main>
+                <Footer />
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-pink-50 to-purple-50 flex flex-col font-sans">
             <Header />
             <main className="flex-1 container mx-auto px-4 py-12 max-w-5xl">
+                {/* Header Section: Title, Search, Write Button */}
                 <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-                    <div>
+                    <div className="flex-1">
                         <h1 className="text-3xl font-bold flex items-center gap-2 text-gray-800">
                             <FaCommentAlt className="text-pink-500" />
                             자유 게시판
                         </h1>
                         <p className="text-gray-600 mt-2">자유롭게 이야기를 나누는 공간입니다.</p>
                     </div>
+
+                    {/* Search Bar */}
+                    <div className="relative w-full md:w-80 group">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <FaSearch className="text-gray-400 group-focus-within:text-pink-500 transition-colors" />
+                        </div>
+                        <input
+                            type="text"
+                            className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-white/80 backdrop-blur-sm placeholder-gray-500 text-gray-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-pink-200 focus:border-pink-400 transition-all shadow-sm hover:shadow-md"
+                            placeholder="제목, 작성자 검색"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+
                     <button
                         onClick={() => setIsWriting(!isWriting)}
-                        className="px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:shadow-lg text-white rounded-xl font-bold transition-all flex items-center gap-2"
+                        className="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:shadow-lg hover:brightness-105 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2 shrink-0"
                     >
                         <FaPen /> 글쓰기
                     </button>
@@ -179,11 +243,9 @@ export default function FreeBoardPage() {
                     </div>
                 )}
 
-
-
                 {/* Posts List */}
                 <div className="space-y-4">
-                    {posts.length > 0 ? posts.map((post) => (
+                    {filteredPosts.length > 0 ? filteredPosts.map((post) => (
                         <Link key={post.id} href={`/board/free/${post.id}`}>
                             <div className="group p-5 rounded-2xl border border-pink-200 bg-white/80 hover:bg-pink-50 hover:border-pink-400 transition-all cursor-pointer hover:shadow-md">
                                 <div className="flex items-start gap-4 flex-1">
@@ -199,7 +261,18 @@ export default function FreeBoardPage() {
                                             {post.hasImage && <FaImage className="text-pink-500 w-4 h-4" />}
                                         </div>
                                         <div className="flex items-center gap-3 text-xs text-gray-500">
-                                            <span className="text-gray-700 font-medium">{post.author}</span>
+                                            <div className="flex items-center gap-2">
+                                                {post.authorProfileImage ? (
+                                                    <img src={post.authorProfileImage} alt={post.author} className="w-5 h-5 rounded-full object-cover border border-gray-200" />
+                                                ) : (user && (user.nickname === post.author || user.id === post.author) && user.profile_image) ? (
+                                                    <img src={user.profile_image} alt={post.author} className="w-5 h-5 rounded-full object-cover border border-gray-200" />
+                                                ) : (
+                                                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-pink-400 to-purple-400 flex items-center justify-center text-white text-[10px] font-bold">
+                                                        {post.author.charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
+                                                <span className="text-gray-700 font-medium">{post.author}</span>
+                                            </div>
                                             <span>•</span>
                                             <span>{post.date}</span>
                                             <span>•</span>
@@ -224,7 +297,7 @@ export default function FreeBoardPage() {
                         </Link>
                     )) : (
                         <div className="py-20 text-center text-gray-500 border border-dashed border-gray-300 rounded-2xl bg-white/60">
-                            아직 작성된 글이 없습니다. 첫 번째 글을 작성해보세요!
+                            {searchTerm ? "검색 결과가 없습니다." : "아직 작성된 글이 없습니다. 첫 번째 글을 작성해보세요!"}
                         </div>
                     )}
                 </div>

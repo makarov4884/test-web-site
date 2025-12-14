@@ -138,7 +138,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
                                                 <ol className="text-xs text-zinc-400 space-y-1 list-decimal list-inside">
                                                     <li>아이디를 입력하고 <b>인증번호 발급</b>을 누르세요.</li>
                                                     <li>발급된 코드를 복사하세요.</li>
-                                                    <li>방송국 메인 화면의 <b>[방송국명]</b> 또는 <b>[소개글]</b>에 붙여넣고 저장하세요.</li>
+                                                    <li>방송국 <b>제목/이름</b> 또는 <b>프로필 메시지</b>에 붙여넣고 저장하세요.</li>
                                                     <li>다시 돌아와서 <b>인증하기</b> 버튼을 누르세요.</li>
                                                 </ol>
                                             </div>
@@ -155,7 +155,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
                                             <div className="space-y-4 text-center">
                                                 <div className="text-sm text-zinc-400 leading-relaxed">
                                                     아래 인증코드를 <br />
-                                                    <span className="text-indigo-400 font-bold">방송국 메인(소개글/제목)</span>에 포함시켜주세요.
+                                                    <span className="text-indigo-400 font-bold">방송국 제목/이름/프로필</span>에 포함시켜주세요.
                                                 </div>
 
                                                 <div
@@ -183,7 +183,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
                                                 </a>
 
                                                 <div className="bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 text-xs text-left text-yellow-200/80 mt-4 leading-relaxed">
-                                                    ⚠️ <b>방송국 소개글</b>에 코드가 저장되어 있어야 인증이 완료됩니다. 인증 완료 후 코드는 삭제하셔도 됩니다.
+                                                    ⚠️ 방송국 <b>제목/이름/프로필</b>에 코드가 저장되어 있어야 인증이 완료됩니다. 인증 완료 후 코드는 삭제하셔도 됩니다.
                                                 </div>
                                             </div>
 

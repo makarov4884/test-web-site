@@ -23,6 +23,13 @@ export async function GET() {
 
         // 1. Get Notices
         const notices = await getCachedNotices();
+
+        if (notices.length === 0) {
+            console.log('[Notification API] Cache empty, triggering update...');
+            // Fire and forget
+            import('@/lib/notice-cache').then(mod => mod.updateNoticesCache().catch(e => console.error(e)));
+        }
+
         notices.forEach(notice => {
             const noticeDate = new Date(notice.date);
             // Check if within 24 hours

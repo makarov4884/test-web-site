@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import {
     FaUser, FaClock, FaHeart, FaStar, FaArrowLeft,
-    FaCalendarAlt, FaChevronLeft, FaChevronRight
+    FaChevronLeft, FaChevronRight
 } from 'react-icons/fa';
 import { TbMoneybag, TbBroadcast } from 'react-icons/tb';
 
@@ -177,7 +177,7 @@ export default function StreamerAnalysisPage() {
 
                 {/* Tabs */}
                 <div className="flex justify-center md:justify-start gap-8 border-b border-pink-200 mb-8 overflow-x-auto">
-                    {['모아보기', '방송기록', '랭킹', '통계'].map(tab => (
+                    {['모아보기'].map(tab => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -293,68 +293,6 @@ export default function StreamerAnalysisPage() {
                                     <RankingTable data={rankingData} limit={20} />
                                 </div>
                             )}
-
-                            {activeTab === '방송기록' && (
-                                <div className="bg-white rounded-2xl border border-pink-200 p-6 text-center text-gray-500 min-h-[400px] flex items-center justify-center flex-col gap-4">
-                                    <FaCalendarAlt size={40} className="opacity-20" />
-                                    <p>방송 기록 데이터가 없습니다.</p>
-                                </div>
-                            )}
-
-                            {activeTab === '랭킹' && (
-                                <div className="bg-white rounded-2xl border border-pink-200 overflow-hidden shadow-md">
-                                    <div className="p-5 border-b border-pink-200 flex items-center justify-between">
-                                        <h3 className="font-bold text-lg text-gray-800">이번달 랭킹 TOP 50</h3>
-                                        <button className="flex items-center gap-1 bg-pink-100 text-pink-600 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-pink-200 transition-colors">
-                                            <FaStar size={10} /> 별풍선 기준
-                                        </button>
-                                    </div>
-                                    <RankingTable data={rankingData} />
-                                </div>
-                            )}
-
-                            {activeTab === '통계' && (
-                                <div className="space-y-8">
-                                    {/* Charts */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {stats?.chartData && stats.chartData.map((chart: any, index: number) => {
-                                            let title = chart.title || `통계 ${index + 1}`;
-                                            let barColor = "bg-gray-400";
-                                            const categories = chart.xaxis || [];
-                                            if (categories.includes('1월') || categories.length === 12) { title = '월별 통계'; barColor = "bg-green-400"; }
-                                            else if (categories.includes('월')) { title = '요일별 통계'; barColor = "bg-cyan-400"; }
-
-                                            const seriesData = chart.series?.[0]?.data || [];
-                                            const maxVal = Math.max(...seriesData, 1);
-
-                                            return (
-                                                <div key={index} className="bg-white rounded-2xl border border-pink-200 p-6 shadow-md">
-                                                    <h3 className="font-bold text-lg mb-6 text-gray-800">{title}</h3>
-                                                    <div className="h-48 flex items-end gap-2 justify-between">
-                                                        {seriesData.map((val: number, i: number) => (
-                                                            <div key={i} className="w-full flex flex-col items-center gap-1 relative group">
-                                                                <div className={`w-full ${barColor} opacity-80 rounded-t hover:opacity-100 transition-all`} style={{ height: `${(val / maxVal) * 100}%` }}></div>
-                                                                <span className="text-[10px] text-gray-500">{categories[i]}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-
-                                    {/* Detailed Ranking Table */}
-                                    <div className="bg-white rounded-2xl border border-pink-200 overflow-hidden shadow-md">
-                                        <div className="p-5 border-b border-pink-200 flex items-center justify-between">
-                                            <h3 className="font-bold text-lg text-gray-800">이번달 랭킹 TOP 50</h3>
-                                            <button className="flex items-center gap-1 bg-pink-100 text-pink-600 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-pink-200 transition-colors">
-                                                <FaStar size={10} /> 별풍선 기준
-                                            </button>
-                                        </div>
-                                        <RankingTable data={detailRankingData} />
-                                    </div>
-                                </div>
-                            )}
                         </>
                     )}
                 </div>
@@ -408,10 +346,21 @@ function RankingTable({ data, limit }: { data: any[], limit?: number }) {
                                     className="flex items-center gap-3 text-gray-700 group-hover:text-gray-900 transition-colors"
                                 >
                                     <img
-                                        src={rank.image || 'https://cdn.bcraping.kr/empty_profile.png'}
+                                        src={rank.userId && rank.userId !== 'test_user'
+                                            ? `https://stimg.sooplive.co.kr/LOGO/${rank.userId.slice(0, 2)}/${rank.userId}/m/${rank.userId}.webp`
+                                            : (rank.image || 'https://cdn.bcraping.kr/empty_profile.png')}
                                         alt={rank.username}
-                                        className="w-9 h-9 rounded-full object-cover ring-2 ring-pink-200 group-hover:ring-pink-300 transition-all"
-                                        onError={(e) => { (e.target as HTMLImageElement).src = 'https://cdn.bcraping.kr/empty_profile.png'; }}
+                                        className="w-9 h-9 rounded-full object-cover ring-2 ring-pink-200 group-hover:ring-pink-300 transition-all border border-pink-100"
+                                        onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            // SOOP 이미지가 실패하면 기본 이미지로 변경
+                                            if (target.src.includes('stimg.sooplive.co.kr')) {
+                                                // 숲 이미지가 안 나오면 Bcraping 이미지나 기본값 시도
+                                                target.src = rank.image || 'https://res.sooplive.co.kr/images/svg/soop_logo.svg';
+                                            } else {
+                                                target.src = 'https://res.sooplive.co.kr/images/svg/soop_logo.svg';
+                                            }
+                                        }}
                                     />
                                     {rank.username}
                                 </a>

@@ -74,9 +74,9 @@ export default function MemberPage() {
 
                     {/* Interactive Overlay */}
                     {MEMBERS.map((member) => (
-                        <div
+                        <Link
                             key={member.id}
-                            onClick={() => window.location.href = `/member/${member.id}`}
+                            href={`/member/${member.id}`}
                             className={`absolute block transition-all hover:bg-white/10 hover:shadow-[0_0_15px_rgba(255,255,255,0.2)] rounded-lg cursor-pointer ${debug ? 'bg-red-500/30 border border-red-500' : ''}`}
                             style={{
                                 top: member.top,
@@ -84,10 +84,10 @@ export default function MemberPage() {
                                 width: member.width,
                                 height: member.height,
                             }}
-                            title={`${member.name} 분석 페이지 보기 (새로고침)`}
+                            title={`${member.name} 분석 페이지 보기`}
                         >
                             <span className="sr-only">{member.name}</span>
-                        </div>
+                        </Link>
                     ))}
 
                     {/* Debug Toggle (Hidden in production or bottom corner) */}
