@@ -14,7 +14,7 @@ export default function Footer() {
     return (
         <footer className="w-full border-t border-pink-200/30 bg-white/50 backdrop-blur-sm py-8 mt-20">
             <div className="container mx-auto px-4 text-center text-sm text-gray-500 font-medium space-y-2">
-                <p>&copy; 2024 Team Jinu. All rights reserved.</p>
+                <p>&copy; 2025 Team Jinu. All rights reserved.</p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2">
                     <span>관리자 이메일: sch4884@naver.com</span>
                     <span className="hidden sm:inline">/</span>
