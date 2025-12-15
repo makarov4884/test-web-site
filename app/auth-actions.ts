@@ -86,7 +86,8 @@ export async function verifyStationContent(id: string): Promise<{ success: boole
 
 async function createSession(id: string) {
     const cookieStore = await cookies();
-    cookieStore.set("session_user", id, {
+    // Encode ID to prevent ByteString error if user enters Korean characters
+    cookieStore.set("session_user", encodeURIComponent(id), {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         maxAge: 60 * 60 * 24 * 7, // 1 week
@@ -104,7 +105,7 @@ export async function loginWithAuth(id: string, code: string): Promise<{ success
     // If code is strictly 8 digits (numeric), treat as Mobile OTP Simulation
     if (/^\d{8}$/.test(code)) {
         const cookieStore = await cookies();
-        cookieStore.set("session_user", id, { httpOnly: true, path: '/' });
+        cookieStore.set("session_user", encodeURIComponent(id), { httpOnly: true, path: '/' });
         return { success: true };
     }
 
@@ -118,7 +119,8 @@ export async function logout() {
 
 export async function getSession(): Promise<UserSession | null> {
     const cookieStore = await cookies();
-    const userId = cookieStore.get("session_user")?.value;
+    const encodedId = cookieStore.get("session_user")?.value;
+    const userId = encodedId ? decodeURIComponent(encodedId) : undefined;
 
     if (userId) {
         // Fetch nickname from bjapi

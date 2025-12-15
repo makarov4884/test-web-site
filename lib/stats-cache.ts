@@ -153,7 +153,7 @@ async function crawlStats(bjId: string): Promise<StreamerStats> {
         // 1. SOOP: Get Basic Profile Info
         try {
             console.log(`[StatsCrawler] Fetching SOOP info for ${bjId}`);
-            await page.goto(`https://www.sooplive.co.kr/station/${bjId}/board`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+            await page.goto(`https://www.sooplive.co.kr/station/${bjId}/board`, { waitUntil: 'domcontentloaded', timeout: 5000 });
             await page.waitForSelector('#station_logo', { timeout: 5000 }).catch(() => { });
 
             const soopData = await page.evaluate(() => {
@@ -212,7 +212,18 @@ async function crawlStats(bjId: string): Promise<StreamerStats> {
                 console.warn('[StatsCrawler] Config read warning', configErr);
             }
 
-            await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+            // Optimize: Block unnecessary resources
+            await page.setRequestInterception(true);
+            page.on('request', (req) => {
+                const resourceType = req.resourceType();
+                if (['image', 'stylesheet', 'font', 'media', 'other'].includes(resourceType)) {
+                    req.abort();
+                } else {
+                    req.continue();
+                }
+            });
+
+            await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
 
             // Wait a bit for dynamic content
             await new Promise(r => setTimeout(r, 3000));

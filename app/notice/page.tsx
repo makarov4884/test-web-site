@@ -132,7 +132,11 @@ export default function NoticePage() {
                 {loading ? (
                     <div className="text-center py-20">
                         <FaSync className="animate-spin text-4xl text-blue-500 mx-auto mb-4" />
-                        <p className="text-gray-600">공지사항을 불러오는 중...</p>
+                        <h3 className="text-gray-800 font-bold text-lg mb-2">공지사항을 불러오는 중...</h3>
+                        <p className="text-gray-500 text-sm">
+                            최신 데이터를 가져오는데 <strong>대략 1분 정도</strong> 소요됩니다.<br />
+                            조금만 기다려주세요!
+                        </p>
                     </div>
                 ) : filteredNotices.length > 0 ? (
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200">

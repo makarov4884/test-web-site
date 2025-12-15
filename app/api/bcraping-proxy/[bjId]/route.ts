@@ -53,7 +53,7 @@ export async function GET(
         // 'domcontentloaded' is faster than 'networkidle'
         await page.goto(targetUrl, {
             waitUntil: 'domcontentloaded',
-            timeout: 15000 // Reduced timeout
+            timeout: 10000 // Reduced timeout
         });
 
         // 3. Extract stats text

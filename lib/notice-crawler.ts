@@ -75,8 +75,9 @@ export async function crawlNotices(): Promise<Notice[]> {
             console.log('[Notice Crawler] No cookie file found or failed to load. Crawling as guest.');
         }
 
-        // [안정성 향상] 메모리 부족 방지를 위해 배치 사이즈를 1로 감소 (Railway 환경 최적화)
-        const batchSize = 1;
+        // [Performance Tuning] Increased batch size for faster crawling
+        // If memory issues occur on Railway (Page Crashed), reduce this back to 1 or 2
+        const batchSize = 5;
         for (let i = 0; i < streamers.length; i += batchSize) {
             const batch = streamers.slice(i, i + batchSize);
 
@@ -128,8 +129,10 @@ export async function crawlNotices(): Promise<Notice[]> {
 
                         while (retries > 0 && !success) {
                             try {
-                                await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
-                                await page.waitForTimeout(2000); // Wait for hydration
+                                // Use 'domcontentloaded' instead of 'networkidle' for speed and stability
+                                // networkidle waits for ALL network traffic to stop, which often hangs on ad/tracker scripts
+                                await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                                await page.waitForTimeout(2000); // Wait for hydration (still needed)
                                 success = true;
                             } catch (e: any) {
                                 retries--;
@@ -292,14 +295,24 @@ export async function crawlNotices(): Promise<Notice[]> {
         if (browser) await browser.close();
     }
 
-    return allNotices.sort((a, b) => {
-        const timeA = new Date(a.date).getTime();
-        const timeB = new Date(b.date).getTime();
-        // Handle Invalid Date (NaN)
-        const valA = isNaN(timeA) ? 0 : timeA;
-        const valB = isNaN(timeB) ? 0 : timeB;
-        return valB - valA;
-    });
+    const finalNotices = allNotices
+        .filter(notice => {
+            // Filter notices created after or on 2025-12-14 (Korea Standard Time)
+            const noticeDate = new Date(notice.date);
+            const cutoffDate = new Date('2025-12-14');
+            if (isNaN(noticeDate.getTime())) return false;
+            return noticeDate >= cutoffDate;
+        })
+        .sort((a, b) => {
+            const timeA = new Date(a.date).getTime();
+            const timeB = new Date(b.date).getTime();
+            const valA = isNaN(timeA) ? 0 : timeA;
+            const valB = isNaN(timeB) ? 0 : timeB;
+            return valB - valA;
+        });
+
+    console.log(`[Notice Crawler] Total filtered notices (from 2025-12-14): ${finalNotices.length}`);
+    return finalNotices;
 }
 
 export async function crawlNoticeDetail(url: string): Promise<Notice | null> {
