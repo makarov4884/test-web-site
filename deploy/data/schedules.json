@@ -1,0 +1,128 @@
+[
+  {
+    "date": "2025-12-13",
+    "content": "오후 1시 페스티벌 28화( 여왕 : 시상식 동반, 벌칙 : 한라산)",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765520872711"
+  },
+  {
+    "date": "2025-12-14",
+    "content": "밤 방송 페스티벌 감사인가",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765520883686"
+  },
+  {
+    "date": "2025-12-15",
+    "content": "오후 1시 주먹이운다 다우닝 테스트 및 최종 합격자 발표 / 2부 오후 5시 NEW 멤버 면접(스튜디오) / 3부 신입 면접 끝나고 라운드걸 오디션 (스튜디오)",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765520927747"
+  },
+  {
+    "date": "2025-12-16",
+    "content": "오후 2시 1박2일 신입멤버들 여행(두니~신입)",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765520943684"
+  },
+  {
+    "date": "2025-12-17",
+    "content": "신입여행 복귀 후(이른 오후종료) / 오후 10시 주먹이운다 훈련",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765520960834"
+  },
+  {
+    "date": "2025-12-18",
+    "content": "오후 1시 주먹이운다(여자 복서 스파링 / 관장님 스파링)",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765520976681"
+  },
+  {
+    "date": "2025-12-19",
+    "content": "오후 1시 주먹이 운다(비방연습 가능성 있음)",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765520992307"
+  },
+  {
+    "date": "2025-12-20",
+    "content": "오후 1시 주먹이운다 최종점검 / 오후 5~6시 앙츄 팬미팅 참석(여왕소원권)",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765521013963"
+  },
+  {
+    "date": "2025-12-21",
+    "content": "[단체합방] 오후 5시 주먹이 운다 결전의 날",
+    "type": "event",
+    "authorId": "melting015",
+    "id": "1765521031404"
+  },
+  {
+    "date": "2025-12-22",
+    "content": "태국 출국",
+    "type": "rest",
+    "authorId": "melting015",
+    "id": "1765521128702"
+  },
+  {
+    "date": "2025-12-23",
+    "content": "태국공방(벌칙 멤버들은 1박2일 한라산 등반 / 순위 높은 멤버 방송으로)",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765521060411"
+  },
+  {
+    "date": "2025-12-24",
+    "content": "한국 귀국(벌칙 멤버들은 1박2일 한라산 등반 / 순위 높은 멤버 방송으로)",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765521078587"
+  },
+  {
+    "date": "2025-12-25",
+    "content": "오후 5시 크리스마스 야방",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765521085807"
+  },
+  {
+    "date": "2025-12-27",
+    "content": "SOOP 시상식 2부 MC",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765521097806"
+  },
+  {
+    "date": "2025-12-28",
+    "content": "오후 1시 페스티벌 29화",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765521112066"
+  },
+  {
+    "date": "2025-12-29",
+    "content": "밤방송 페스티벌 감사 방송",
+    "type": "normal",
+    "authorId": "melting015",
+    "id": "1765521119096"
+  },
+  {
+    "date": "2025-12-30",
+    "content": "휴",
+    "type": "rest",
+    "authorId": "melting015",
+    "id": "1765521136844"
+  },
+  {
+    "date": "2025-12-31",
+    "content": "[단체합방] 이른낮예정 봉사활동 (연탄배달)",
+    "type": "event",
+    "authorId": "melting015",
+    "id": "1765521151291"
+  }
+]

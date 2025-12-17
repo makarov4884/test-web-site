@@ -1,0 +1,21 @@
+{
+    "pyh3646": {
+        "lastUpdated": "2025-12-12",
+        "rankings": [
+            {
+                "rank": 1,
+                "name": "사용자1",
+                "count": 45,
+                "stars": "125,000",
+                "monthlyTotal": "2,500,000"
+            },
+            {
+                "rank": 2,
+                "name": "사용자2",
+                "count": 38,
+                "stars": "98,000",
+                "monthlyTotal": "1,800,000"
+            }
+        ]
+    }
+}

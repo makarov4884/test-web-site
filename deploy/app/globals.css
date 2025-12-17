@@ -1,0 +1,203 @@
+@import "tailwindcss";
+
+/* stylelint-disable-next-line at-rule-no-unknown */
+/* @ts-ignore */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #09090b;
+  /* zinc-950 */
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --primary: #18181b;
+  /* zinc-900 */
+  --primary-foreground: #fafafa;
+  /* zinc-50 */
+  --secondary: #f4f4f5;
+  /* zinc-100 */
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  /* zinc-500 */
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --border: #e4e4e7;
+  /* zinc-200 */
+  --input: #e4e4e7;
+  --ring: #18181b;
+  --radius: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090b;
+    /* zinc-950 */
+    --foreground: #fafafa;
+    /* zinc-50 */
+    --card: #18181b;
+    /* zinc-900 */
+    --card-foreground: #fafafa;
+    --popover: #09090b;
+    --popover-foreground: #fafafa;
+    --primary: #fafafa;
+    --primary-foreground: #18181b;
+    --secondary: #27272a;
+    /* zinc-800 */
+    --secondary-foreground: #fafafa;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+    /* zinc-400 */
+    --accent: #27272a;
+    --accent-foreground: #fafafa;
+    --destructive: #7f1d1d;
+    --destructive-foreground: #fafafa;
+    --border: #27272a;
+    --input: #27272a;
+    --ring: #d4d4d8;
+  }
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Utilities for Glassmorphism & Animations */
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.gradient-text {
+  background: linear-gradient(to right, #a78bfa, #f472b6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Pastel Gradient Background (Inspired by Team Photo) */
+.gradient-bg-pastel {
+  background: linear-gradient(135deg,
+      #a8d5e2 0%,
+      /* Soft cyan */
+      #b8d8e8 15%,
+      /* Light blue */
+      #c8dbed 30%,
+      /* Pale blue */
+      #d8def2 45%,
+      /* Lavender blue */
+      #e8d8f0 60%,
+      /* Light purple */
+      #f0d0e8 75%,
+      /* Soft pink-purple */
+      #f8c8e0 90%,
+      /* Pastel pink */
+      #ffc0d8 100%
+      /* Light pink */
+    );
+}
+
+.gradient-bg-pastel-reverse {
+  background: linear-gradient(135deg,
+      #ffc0d8 0%,
+      /* Light pink */
+      #f8c8e0 10%,
+      /* Pastel pink */
+      #f0d0e8 25%,
+      /* Soft pink-purple */
+      #e8d8f0 40%,
+      /* Light purple */
+      #d8def2 55%,
+      /* Lavender blue */
+      #c8dbed 70%,
+      /* Pale blue */
+      #b8d8e8 85%,
+      /* Light blue */
+      #a8d5e2 100%
+      /* Soft cyan */
+    );
+}
+
+/* Overlay with pastel gradient */
+.gradient-overlay-pastel {
+  position: relative;
+}
+
+.gradient-overlay-pastel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg,
+      rgba(168, 213, 226, 0.3) 0%,
+      rgba(232, 216, 240, 0.3) 50%,
+      rgba(255, 192, 216, 0.3) 100%);
+  pointer-events: none;
+}
+
+/* --- Custom Scrollbar Styling (Pink/Purple Theme) --- */
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(244, 114, 182, 0.4); /* Pink-400 with opacity */
+  border-radius: 9999px;
+  border: 3px solid transparent; /* Creates space around thumb */
+  background-clip: content-box;
+  transition: background-color 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(236, 72, 153, 0.8); /* Pink-500 stronger on hover */
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 114, 182, 0.4) transparent;
+}
