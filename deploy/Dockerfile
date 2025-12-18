@@ -1,28 +1,18 @@
-# Use official Playwright image (includes Node.js & Browsers) - Essential for Crawler
+# Playwright가 포함된 공식 이미지 사용 (브라우저 설치 번거로움 해결)
 FROM mcr.microsoft.com/playwright:v1.49.0-jammy
 
-# Set working directory
+# 작업 디렉토리 설정
 WORKDIR /app
 
-# Copy package files first to leverage cache
-COPY package.json package-lock.json ./
-
-# Install dependencies (Clean install)
+# 패키지 파일 복사 및 설치
+COPY package*.json ./
 RUN npm ci
 
-# Copy the rest of the application code
+# 소스 코드 복사
 COPY . .
 
-# Build the Next.js application
-RUN npm run build
+# 프로덕션 환경 변수 설정
+ENV NODE_ENV=production
 
-# Set environment variable for port (Hugging Face uses 7860)
-ENV PORT=7860
-# Allow external access
-ENV HOST=0.0.0.0
-
-# Expose the port
-EXPOSE 7860
-
-# Start the application
-CMD ["npm", "start"]
+# 크롤러 실행 (웹 서버가 아닌 크롤러만 실행)
+CMD ["node", "scripts/festival-crawler.js"]

@@ -1,4 +1,4 @@
-import { chromium, type Browser, type Route } from 'playwright';
+import type { Browser, Route } from 'playwright';
 import { getStreamers } from '@/app/actions';
 import fs from 'fs/promises';
 import path from 'path';
@@ -22,6 +22,12 @@ export async function crawlNotices(onProgress?: (notices: Notice[]) => Promise<v
     console.log('[Notice Crawler] Starting crawl v7 (Incremental Saving)...');
     const allNotices: Notice[] = [];
     let browser: Browser | null = null;
+
+    // Use createRequire to bypass Webpack bundling completely
+    // This fixes "undefined (reading 'exitZones')" by loading the actual node_module at runtime
+    const { createRequire } = await import('module');
+    const require = createRequire(import.meta.url);
+    const { chromium } = require('playwright');
 
     try {
         const streamers = await getStreamers();
@@ -114,13 +120,13 @@ export async function crawlNotices(onProgress?: (notices: Notice[]) => Promise<v
 
                     if (noteLink && noteLink.noticeUrl) {
                         if (Array.isArray(noteLink.noticeUrl)) {
-                            targetUrls = noteLink.noticeUrl;
+                            targetUrls = [...noteLink.noticeUrl];
                         } else {
                             targetUrls = [noteLink.noticeUrl];
                         }
-                    } else {
-                        targetUrls = [`https://www.sooplive.co.kr/station/${streamer.bjId}/post`];
                     }
+                    // Always add the Main Station Page as a fallback/catch-all (contains recent notices)
+                    targetUrls.push(`https://www.sooplive.co.kr/station/${streamer.bjId}`);
 
                     for (let rawUrl of targetUrls) {
                         const url = rawUrl.trim();
@@ -154,31 +160,62 @@ export async function crawlNotices(onProgress?: (notices: Notice[]) => Promise<v
                                 itemSelector = 'div[class*="List_"] li, li[class*="Post_"], tr';
                             }
 
+                            // Support new SOOP UI (Board_newsItem)
+                            itemSelector += ', div[class*="Board_newsItem"]';
+
                             try {
                                 await page.waitForSelector(itemSelector, { state: 'attached', timeout: 8000 }); // 5s -> 8s
                             } catch (e) {
-                                itemSelector = 'li, tr';
+                                itemSelector = 'li, tr, div[class*="Board_newsItem"]';
                                 try {
-                                    await page.waitForSelector('li, tr', { state: 'attached', timeout: 3000 }); // 2s -> 3s
+                                    await page.waitForSelector('li, tr, div[class*="Board_newsItem"]', { state: 'attached', timeout: 3000 });
                                 } catch (e2) {
                                     continue;
                                 }
                             }
 
-                            const extracted = await page.evaluate(({ itemSelector, streamerId, streamerName }) => {
-                                // ... (evaluate content remains same)
+                            const extracted = await page.evaluate(({ isBoardUrl, streamerId, streamerName }) => {
+                                // Helper to get unique elements (deduplication by reference)
+                                const getUniqueElements = (elements: Element[]) => {
+                                    return Array.from(new Set(elements));
+                                };
+
                                 const items: any[] = [];
-                                const listItems = document.querySelectorAll(itemSelector as string);
+
+                                // Robust separate queries to avoid selector parsing issues
+                                let rawElements: Element[] = [];
+                                if (isBoardUrl) {
+                                    rawElements.push(...Array.from(document.querySelectorAll('div[class*="List_"] li')));
+                                    rawElements.push(...Array.from(document.querySelectorAll('li[class*="Post_"]')));
+                                    rawElements.push(...Array.from(document.querySelectorAll('tr')));
+                                }
+                                // Always check for new UI (Board_newsItem) and generic lists
+                                rawElements.push(...Array.from(document.querySelectorAll('div[class*="Board_newsItem"]')));
+
+                                // Fallback: if nothing found, try generic li/tr
+                                if (rawElements.length === 0) {
+                                    rawElements.push(...Array.from(document.querySelectorAll('li')));
+                                    rawElements.push(...Array.from(document.querySelectorAll('tr')));
+                                }
+
+                                const listItems = getUniqueElements(rawElements);
                                 const now = new Date(); // Browser time
 
                                 listItems.forEach((el, idx) => {
-                                    // ... extraction logic ...
-                                    let titleEl = el.querySelector('[class*="ContentTitle_title"]');
+                                    // Extraction logic
+                                    let titleEl = el.querySelector('[class*="ContentTitle_title"], [class*="Title_title"]');
                                     let contentEl = el.querySelector('[class*="Content_text"]');
-                                    let dateContainer = el.querySelector('[class*="Interaction_details"]');
-                                    let linkEl = el.querySelector('a[href*="/station/"]') as HTMLAnchorElement | null;
+                                    let dateContainer = el.querySelector('[class*="Interaction_details"], [class*="Date_date"]'); // Guessing Date_date
+                                    let linkEl = el.querySelector('a[href*="/station/"], a[class*="Board_contents"]');
+
+                                    // If the element itself is the link container (New UI often wraps everything in A)
+                                    if (el.tagName === 'A' || el.querySelector('a[class*="Board_contents"]')) {
+                                        const anchor = el.tagName === 'A' ? el : el.querySelector('a[class*="Board_contents"]');
+                                        if (anchor) linkEl = anchor as HTMLAnchorElement;
+                                    }
 
                                     if (el.tagName.toLowerCase() === 'tr') {
+                                        // ... existing TR logic ...
                                         const subjectLink = el.querySelector('a') as HTMLAnchorElement | null;
                                         if (subjectLink) {
                                             titleEl = subjectLink;
@@ -196,7 +233,14 @@ export async function crawlNotices(onProgress?: (notices: Notice[]) => Promise<v
                                         title = title.replace(/^공지\s*/, '').trim();
                                         const content = contentEl?.textContent?.trim() || '';
                                         let date = '';
-                                        // ... date parsing ...
+
+                                        // Attempt to find date in text if container missing
+                                        if (!dateContainer && el.textContent) {
+                                            // Fallback search for date-like string in the whole item
+                                            const match = el.textContent.match(/(\d{4}[-.]\d{2}[-.]\d{2})|(\d+시간 전)|(\d+분 전)/);
+                                            if (match) dateContainer = { textContent: match[0] } as any;
+                                        }
+
                                         if (dateContainer) {
                                             const rawDate = dateContainer.textContent?.trim() || '';
                                             const dateMatch = rawDate.match(/(\d{4})[-.](\d{2})[-.](\d{2})/);
@@ -256,7 +300,7 @@ export async function crawlNotices(onProgress?: (notices: Notice[]) => Promise<v
                                     }
                                 });
                                 return items;
-                            }, { itemSelector, streamerId: streamer.bjId, streamerName: streamer.name });
+                            }, { isBoardUrl, streamerId: streamer.bjId, streamerName: streamer.name });
 
                             if (extracted.length > 0) {
                                 allNotices.push(...extracted);
@@ -303,10 +347,20 @@ export async function crawlNotices(onProgress?: (notices: Notice[]) => Promise<v
         if (browser) await browser.close();
     }
 
-    const finalNotices = allNotices
+    // Deduplicate logic
+    const uniqueMap = new Map<string, Notice>();
+    allNotices.forEach(notice => {
+        // Create unique key based on streamer, title, and date
+        const key = `${notice.streamerId}|${notice.title}|${notice.date}`;
+        if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, notice);
+        }
+    });
+
+    const finalNotices = Array.from(uniqueMap.values())
         .filter(notice => {
             const noticeDate = new Date(notice.date);
-            const cutoffDate = new Date('2025-12-14');
+            const cutoffDate = new Date('2025-12-01');
             if (isNaN(noticeDate.getTime())) return false;
             return noticeDate >= cutoffDate;
         })

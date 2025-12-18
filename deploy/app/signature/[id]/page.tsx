@@ -25,40 +25,24 @@ export default function SignatureDetailPage() {
     const [signatureTitle, setSignatureTitle] = useState('');
 
     useEffect(() => {
-        // TODO: Fetch videos for this signature ID from API
-        // For now, using placeholder data
-        setLoading(false);
-        setSignatureTitle(`${signatureId} - 관련 영상`);
+        // Fetch videos for this signature ID from API
+        fetch(`/api/signature-videos/${signatureId}`)
+            .then(res => res.json())
+            .then(data => {
+                setSignatureTitle(data.signatureTitle || `${signatureId} - 관련 영상`);
+                setVideos(data.videos || []);
 
-        // Example data - replace with actual API call
-        setVideos([
-            {
-                id: '1',
-                title: '모먼트 (대화방)',
-                thumbnailUrl: '',
-                videoUrl: '',
-                category: '모먼트'
-            },
-            {
-                id: '2',
-                title: '10만원 (대화방)',
-                thumbnailUrl: '',
-                videoUrl: '',
-                category: '10만원'
-            },
-            {
-                id: '3',
-                title: '클립 (대화방)',
-                thumbnailUrl: '',
-                videoUrl: '',
-                category: '클립'
-            }
-        ]);
-
-        // Auto-play first video
-        if (videos.length > 0) {
-            setSelectedVideo(videos[0]);
-        }
+                // Auto-select first video
+                if (data.videos && data.videos.length > 0) {
+                    setSelectedVideo(data.videos[0]);
+                }
+            })
+            .catch(err => {
+                console.error('Failed to fetch videos:', err);
+            })
+            .finally(() => {
+                setLoading(false);
+            });
     }, [signatureId]);
 
     return (

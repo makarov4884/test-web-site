@@ -1,457 +1,496 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlay, FaSearch, FaTimes, FaStar, FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
-import { IoIosArrowBack } from 'react-icons/io';
-
-interface Signature {
-    id: number;
-    title: string;
-    isNew: boolean;
-    category: string;
-    videoUrl?: string;
-    thumbnailUrl?: string;
-}
-
-const SECTIONS = [
-    { id: 'supernova', label: 'Supernova' },
-    { id: 'Alive', label: 'Alive' },
-    { id: 'new', label: 'NEW' },
-    { id: '1000', label: '1000~' },
-    { id: '2000', label: '2000~' },
-    { id: '3000', label: '3000~' },
-    { id: '4000', label: '4000~' },
-    { id: '5000', label: '5000~' },
-    { id: '6000', label: '6000~' },
-    { id: '7000', label: '7000~' },
-    { id: '8000', label: '8000~' },
-    { id: '9000', label: '9000~' },
-    { id: '10000', label: '10000~' },
-];
+import { formatDistanceToNow } from 'date-fns';
+import { ko } from 'date-fns/locale';
+import { DonationData, RealtimeStats, BjStats, UserStats } from '@/types/festival';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
+import { IoClose, IoDownload } from 'react-icons/io5';
 
 export default function FestivalPage() {
-    const router = useRouter();
-    const [signatures, setSignatures] = useState<Signature[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [donations, setDonations] = useState<DonationData[]>([]);
+    const [realtimeStats, setRealtimeStats] = useState<RealtimeStats | null>(null);
+    const [bjStats, setBjStats] = useState<BjStats[]>([]);
+    const [userStats, setUserStats] = useState<UserStats[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [showAll, setShowAll] = useState(false);
+    const [videoUrl, setVideoUrl] = useState('https://play.sooplive.co.kr/pyh3646/289919534');
 
-    const [selectedItem, setSelectedItem] = useState<Signature | null>(null);
-    const [isEditMode, setIsEditMode] = useState(false);
-    const [editingItem, setEditingItem] = useState<Partial<Signature> | null>(null);
+    // 모달 관련 상태
+    const [selectedBj, setSelectedBj] = useState<BjStats | null>(null);
+    const [bjDonations, setBjDonations] = useState<DonationData[]>([]);
 
-    // Fetch Data
+    // 스트리머 클릭 핸들러
+    const handleBjClick = (bj: BjStats) => {
+        if (bj.bjName === '미분류') return; // 미분류는 별도 페이지로 이동하므로 모달 띄우지 않음
+
+        // 해당 BJ의 후원 내역 필터링
+        // 1. targetBjName이 일치하거나
+        // 2. 메시지에 BJ 이름이나 키워드가 포함된 경우 (이미 백엔드에서 집계된 로직을 따름)
+        // 여기서는 targetBjName이 정확히 일치하는 것만 보여주는 것이 가장 정확함
+        // 하지만 update-bj-names.js로 일괄 업데이트했으므로 targetBjName만 확인하면 됨
+        const filtered = donations.filter(d => d.targetBjName === bj.bjName);
+
+        setBjDonations(filtered);
+        setSelectedBj(bj);
+        setAutoRefresh(false); // 모달 열 때 자동 갱신 중지
+    };
+
+    // 엑셀 다운로드 핸들러
+    const handleDownloadExcel = () => {
+        if (!selectedBj || bjDonations.length === 0) return;
+
+        const excelData = bjDonations.map(d => ({
+            '날짜': d.createDate,
+            '방송시간': d.relativeTime || '-',
+            '후원자': d.ballonUserName,
+            '별풍선': d.ballonCount,
+            '메시지': d.message || ''
+        }));
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        XLSX.utils.book_append_sheet(wb, ws, "후원내역");
+
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const data = new Blob([excelBuffer], { type: 'application/octet-stream' });
+
+        saveAs(data, `${selectedBj.bjName}_후원내역_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    };
+
+    const closeDetailModal = () => {
+        setSelectedBj(null);
+        setBjDonations([]);
+        setAutoRefresh(true); // 모달 닫을 때 자동 갱신 재개
+    };
+
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+
+            const timestamp = new Date().getTime();
+            const crawlRes = await fetch(`/api/festival/crawl?t=${timestamp}`, {
+                cache: 'no-store',
+                headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache'
+                }
+            });
+            const crawlData = await crawlRes.json();
+
+            if (!crawlData.success) {
+                throw new Error(crawlData.error || '데이터를 가져오는데 실패했습니다.');
+            }
+
+            const statsRes = await fetch(`/api/festival/stats?t=${timestamp}`, {
+                method: 'POST',
+                cache: 'no-store',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache'
+                },
+                body: JSON.stringify(crawlData.data),
+            });
+
+            const statsData = await statsRes.json();
+
+            if (!statsData.success) {
+                throw new Error(statsData.error || '통계를 계산하는데 실패했습니다.');
+            }
+
+            const uniqueMap = new Map();
+            crawlData.data.forEach((item: any) => {
+                if (!uniqueMap.has(item.messageId)) {
+                    uniqueMap.set(item.messageId, item);
+                }
+            });
+
+            const uniqueData = Array.from(uniqueMap.values()).sort((a: any, b: any) => {
+                const parseDate = (dateStr: string) => {
+                    if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+                        return new Date(dateStr).getTime();
+                    }
+                    const match = dateStr.match(/(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+                    if (match) {
+                        const [_, month, day, hour, min, sec] = match;
+                        const year = new Date().getFullYear();
+                        return new Date(`${year}-${month}-${day} ${hour}:${min}:${sec}`).getTime();
+                    }
+                    return 0;
+                };
+
+                const timeA = parseDate(a.createDate);
+                const timeB = parseDate(b.createDate);
+                return timeB - timeA;
+            });
+
+            setDonations(uniqueData as DonationData[]);
+            setRealtimeStats(statsData.realtimeStats);
+            setBjStats(statsData.bjStats);
+            setUserStats(statsData.userStats);
+
+        } catch (err) {
+            console.error('Error fetching data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        fetch('/api/signatures')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setSignatures(data);
-            })
-            .catch(err => console.error("Failed to load signatures:", err));
+        fetchData();
     }, []);
 
-    // Save Data
-    const saveSignatures = async (newSignatures: Signature[]) => {
-        setSignatures(newSignatures);
-        try {
-            await fetch('/api/signatures', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newSignatures)
-            });
-        } catch (e) {
-            console.error("Failed to save:", e);
-            alert("저장에 실패했습니다.");
+
+
+    const safeParseDate = (dateStr: string) => {
+        if (!dateStr) return new Date();
+        let safeStr = dateStr.replace(' ', 'T');
+        if (!/^\d{4}/.test(safeStr)) {
+            safeStr = `${new Date().getFullYear()}-${safeStr}`;
         }
+        const date = new Date(safeStr);
+        return isNaN(date.getTime()) ? new Date() : date;
     };
 
-    // Handlers
-    const handleSaveItem = () => {
-        if (!editingItem) return;
-
-        if (!editingItem.title) {
-            alert('제목을 입력해주세요.');
-            return;
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (autoRefresh) {
+            interval = setInterval(fetchData, 1000);
         }
-
-        if (editingItem.id === undefined || editingItem.id === null) {
-            alert('ID(숫자)를 입력해주세요.');
-            return;
-        }
-
-        const newItem: Signature = {
-            id: Number(editingItem.id),
-            title: editingItem.title,
-            isNew: editingItem.isNew || false,
-            category: editingItem.category || 'All',
-            videoUrl: editingItem.videoUrl || '',
-            thumbnailUrl: editingItem.thumbnailUrl || ''
-        };
-
-        let newSignatures = [...signatures];
-        const existingIndex = newSignatures.findIndex(s => s.id === newItem.id);
-        if (existingIndex >= 0) {
-            newSignatures[existingIndex] = newItem;
-        } else {
-            newSignatures = [newItem, ...newSignatures];
-        }
-
-        saveSignatures(newSignatures);
-        setEditingItem(null);
-    };
-
-    const deleteSignature = (id: number) => {
-        if (confirm('삭제하시겠습니까?')) {
-            const newSignatures = signatures.filter(s => s.id !== id);
-            saveSignatures(newSignatures);
-        }
-    };
-
-    // Helper to filter items for a section
-    const getSectionItems = (sectionId: string) => {
-        return signatures.filter(item => {
-            // Search filter first
-            if (searchQuery && !item.title.toLowerCase().includes(searchQuery.toLowerCase()) && !item.id.toString().includes(searchQuery)) {
-                return false;
-            }
-
-            // Supernova section shows items with "[캐치]" in title
-            if (sectionId === 'supernova') {
-                return item.title.includes('[캐치]');
-            }
-
-            if (sectionId === 'new') return item.isNew;
-            if (sectionId === 'Alive') return item.category === 'Alive';
-
-            const rangeStart = parseInt(sectionId);
-            if (!isNaN(rangeStart)) {
-                if (rangeStart === 10000) return item.id >= 10000;
-                return item.id >= rangeStart && item.id < rangeStart + 1000;
-            }
-            return false;
-        }).sort((a, b) => b.id - a.id);
-    };
+        return () => clearInterval(interval);
+    }, [autoRefresh]);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-purple-50 text-gray-800 font-sans pb-20">
+        <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-pink-50 to-purple-50 flex flex-col font-sans selection:bg-pink-300/30">
+            <Header />
 
-            <div className="max-w-7xl mx-auto px-4 pt-6">
-                {/* Top Controls */}
-                <div className="flex items-center justify-between mb-8">
-                    <button
-                        onClick={() => router.back()}
-                        className="p-2 hover:bg-white/50 rounded-full transition-colors"
-                    >
-                        <IoIosArrowBack className="text-2xl" />
-                    </button>
-
-                    <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-purple-600">
-                        Festival Gallery
+            <main className="flex-1 container mx-auto px-4 py-8">
+                {/* Title Section */}
+                <div className="text-center mb-8">
+                    <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-purple-600 tracking-tight mb-2">
+                        Team Jinu Festival
                     </h1>
+                </div>
 
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setIsEditMode(!isEditMode)}
-                            className={`p-2 rounded-full transition-colors ${isEditMode ? 'bg-pink-100 text-pink-600' : 'hover:bg-white/50 text-gray-600'}`}
-                        >
-                            <FaEdit className="text-xl" />
-                        </button>
-                        {isEditMode && (
-                            <button
-                                onClick={() => {
-                                    setEditingItem({ isNew: true, category: 'All' });
-                                }}
-                                className="p-2 bg-pink-500 text-white rounded-full hover:bg-pink-600 shadow-lg transition-transform hover:scale-105"
-                            >
-                                <FaPlus className="text-xl" />
-                            </button>
+                {/* Controls */}
+                <div className="flex items-center justify-end gap-4 mb-6">
+                    <div className="flex items-center gap-2 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-full border border-pink-200/40 shadow-sm">
+                        <span className={`w-2 h-2 rounded-full ${autoRefresh ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
+                        <span className="text-xs font-medium text-gray-700">LIVE</span>
+                    </div>
+                    <button
+                        onClick={() => setAutoRefresh(!autoRefresh)}
+                        className={`px-4 py-2 rounded-full text-sm font-bold transition-all shadow-sm ${autoRefresh
+                            ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white'
+                            : 'bg-white/60 text-gray-600 border border-gray-300'
+                            }`}
+                    >
+                        {autoRefresh ? '자동 갱신 ON' : '자동 갱신 OFF'}
+                    </button>
+                </div>
+
+                {/* Top Section: Video & Summary */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+
+                    {/* Video Player */}
+                    <div className="lg:col-span-2">
+                        <div className="aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl border border-pink-200/40 relative group">
+                            <iframe
+                                src={videoUrl}
+                                className="w-full h-full"
+                                allowFullScreen
+                            />
+                            <div className="absolute top-4 left-4 bg-red-600/90 backdrop-blur text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-2 shadow-lg">
+                                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                                LIVE MONITORING
+                            </div>
+                            <div className="absolute bottom-0 w-full p-4 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                <input
+                                    type="text"
+                                    className="flex-1 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-xs text-white placeholder-white/60 focus:outline-none focus:border-pink-400"
+                                    value={videoUrl}
+                                    onChange={(e) => setVideoUrl(e.target.value)}
+                                    placeholder="영상 임베드 주소 입력..."
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Summary Cards */}
+                    <div className="space-y-4">
+                        {/* Total Counter */}
+                        <div className="bg-gradient-to-br from-white/90 to-pink-50/80 backdrop-blur-xl p-6 rounded-3xl border border-pink-200/40 shadow-xl relative overflow-hidden h-[180px] flex flex-col justify-center">
+                            <div className="absolute top-0 right-0 p-4 opacity-10">
+                                <svg className="w-24 h-24 text-pink-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" /></svg>
+                            </div>
+                            <h3 className="text-gray-500 text-sm font-medium uppercase tracking-wider mb-2">Total Revenue</h3>
+                            <p className="text-4xl font-black text-gray-800 truncate">
+                                {realtimeStats?.totalBalloons.toLocaleString()}
+                                <span className="text-xl text-pink-600 ml-1">개</span>
+                            </p>
+                            <div className="mt-4 flex items-center gap-2 text-xs text-gray-500">
+                                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                실시간 집계중
+                            </div>
+                        </div>
+
+                        {/* Top BJ Badge */}
+                        {bjStats.length > 0 ? (
+                            <div className="bg-gradient-to-br from-pink-100/80 to-purple-100/80 backdrop-blur-xl p-6 rounded-3xl border border-pink-300/60 shadow-xl relative h-[180px] flex flex-col justify-center">
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <h3 className="text-pink-700 text-xs font-bold uppercase tracking-widest mb-2">Current No.1</h3>
+                                        <p className="text-3xl font-black text-gray-800 truncate w-40">{bjStats[0].bjName}</p>
+                                        <p className="text-xl font-bold text-pink-600 mt-1">{bjStats[0].totalBalloons.toLocaleString()} 개</p>
+                                    </div>
+                                    <div className="text-6xl animate-bounce">👑</div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-white/60 backdrop-blur-xl p-6 rounded-3xl border border-gray-200 h-[180px] flex items-center justify-center text-gray-500">
+                                데이터 수집중...
+                            </div>
                         )}
                     </div>
                 </div>
 
-                {/* Search Bar */}
-                <div className="relative max-w-md mx-auto mb-10">
-                    <input
-                        type="text"
-                        placeholder="Search by title or ID..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-pink-100 focus:outline-none focus:ring-2 focus:ring-pink-400 shadow-sm transition-all"
-                    />
-                    <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                </div>
+                {/* Middle: Rankings & Stats */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
 
-                {/* Sections List */}
-                <div className="space-y-12">
-                    {SECTIONS.map((section) => {
-                        const items = getSectionItems(section.id);
-                        if (items.length === 0) return null;
-
-                        return (
-                            <section key={section.id} className="relative">
-                                <div className="flex items-center gap-2 mb-4 px-2">
-                                    <h2 className="text-xl font-bold text-gray-800">{section.label}</h2>
-                                    <span className="text-sm text-gray-400 font-medium bg-white px-2 py-0.5 rounded-full shadow-sm">
-                                        {items.length}
-                                    </span>
-                                </div>
-
-                                {/* Horizontal Scroll Container */}
-                                <div className="flex overflow-x-auto pb-6 -mx-4 px-4 gap-4 scrollbar-hide snap-x snap-mandatory">
-                                    {items.map((item) => (
-                                        <motion.div
-                                            key={item.id}
-                                            layoutId={`card-${item.id}`}
-                                            className="min-w-[160px] md:min-w-[200px] snap-start"
-                                            onClick={() => !isEditMode && setSelectedItem(item)}
+                    {/* Streamer Ranking */}
+                    <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-pink-200/40 shadow-xl overflow-hidden h-[600px] flex flex-col">
+                        <div className="p-6 border-b border-pink-100 flex justify-between items-center shrink-0 bg-gradient-to-r from-pink-50/50 to-purple-50/50">
+                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                🏆 스트리머 순위
+                            </h2>
+                            <span className="text-xs text-gray-500">실시간 반영</span>
+                        </div>
+                        <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-pink-300">
+                            <table className="w-full text-sm">
+                                <thead className="bg-pink-50/50 text-gray-600 uppercase text-xs sticky top-0 z-10">
+                                    <tr>
+                                        <th className="px-6 py-4 text-left">Rank</th>
+                                        <th className="px-6 py-4 text-left">Streamer</th>
+                                        <th className="px-6 py-4 text-right">Progress</th>
+                                        <th className="px-6 py-4 text-right">Score</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-pink-100">
+                                    {bjStats.map((bj, idx) => (
+                                        <tr
+                                            key={bj.bjName}
+                                            className="hover:bg-pink-50/30 transition-colors group"
                                         >
-                                            <div className={`
-                                                relative aspect-[4/5] rounded-2xl overflow-hidden cursor-pointer group shadow-md hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-purple-400 via-pink-500 to-red-500
-                                                ${item.category === 'Alive' ? 'ring-2 ring-pink-400 ring-offset-2' : ''}
-                                                ${section.id === 'supernova' ? 'ring-2 ring-yellow-400 ring-offset-2' : ''}
-                                            `}>
-                                                {/* Thumbnail Background */}
-                                                {item.thumbnailUrl ? (
-                                                    <img
-                                                        src={item.thumbnailUrl}
-                                                        alt={item.title}
-                                                        className="absolute inset-0 w-full h-full object-cover"
-                                                    />
-                                                ) : (
-                                                    <div className="absolute inset-0 bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 flex items-center justify-center">
-                                                        <div className="text-white text-6xl font-black opacity-20">
-                                                            {item.id}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Gradient Overlay */}
-                                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
-
-                                                {/* Edit Controls (Overlay) */}
-                                                {isEditMode && (
-                                                    <div className="absolute top-2 right-2 flex gap-1 z-10" onClick={(e) => e.stopPropagation()}>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setEditingItem(item); }}
-                                                            className="p-1.5 bg-white/90 text-blue-500 rounded-full hover:bg-white"
+                                            <td className="px-6 py-4 font-bold text-gray-500 w-16">
+                                                {idx + 1}
+                                            </td>
+                                            <td className="px-6 py-4 font-medium text-gray-800">
+                                                <div
+                                                    className={`flex items-center gap-2 ${bj.bjName !== '미분류' ? 'cursor-pointer hover:text-pink-600 transition-colors' : ''}`}
+                                                    onClick={() => handleBjClick(bj)}
+                                                >
+                                                    {bj.bjName}
+                                                    {bj.bjName === '미분류' && (
+                                                        <a
+                                                            href="/festival/unclassified"
+                                                            className="ml-2 text-xs text-pink-600 hover:text-pink-700 underline"
+                                                            onClick={(e) => e.stopPropagation()}
                                                         >
-                                                            <FaEdit size={12} />
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); deleteSignature(item.id); }}
-                                                            className="p-1.5 bg-white/90 text-red-500 rounded-full hover:bg-white"
-                                                        >
-                                                            <FaTrash size={12} />
-                                                        </button>
-                                                    </div>
-                                                )}
-
-                                                {/* Content info */}
-                                                <div className="absolute bottom-0 left-0 p-4 w-full">
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className="text-xs font-mono text-pink-300 bg-black/30 px-1.5 py-0.5 rounded backdrop-blur-md">
-                                                            {item.id}
-                                                        </span>
-                                                        {item.isNew && (
-                                                            <span className="text-[10px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-full animate-pulse">
-                                                                NEW
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <h3 className="text-white font-bold text-lg leading-tight line-clamp-2 group-hover:text-pink-200 transition-colors">
-                                                        {item.title}
-                                                    </h3>
+                                                            (분류하기 →)
+                                                        </a>
+                                                    )}
                                                 </div>
-
-                                                {/* Play Icon Overlay */}
-                                                {!isEditMode && (
-                                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                                        <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center">
-                                                            <FaPlay className="text-white ml-1 text-lg" />
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </div>
-                            </section>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* Edit Modal (Add/Update) */}
-            <AnimatePresence>
-                {editingItem && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.9, opacity: 0 }}
-                            className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
-                        >
-                            <h3 className="text-xl font-bold mb-4">
-                                {editingItem.id && signatures.some(s => s.id === editingItem.id) ? 'Edit Item' : 'Add New Item'}
-                            </h3>
-                            <div className="space-y-3">
-                                <input
-                                    type="number"
-                                    placeholder="ID (e.g. 1005)"
-                                    className="w-full border p-2 rounded"
-                                    value={editingItem.id || ''}
-                                    onChange={e => setEditingItem({ ...editingItem, id: parseInt(e.target.value) })}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="Title (use [캐치] for Supernova section)"
-                                    className="w-full border p-2 rounded"
-                                    value={editingItem.title || ''}
-                                    onChange={e => setEditingItem({ ...editingItem, title: e.target.value })}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="Video URL (Youtube/Soop)"
-                                    className="w-full border p-2 rounded"
-                                    value={editingItem.videoUrl || ''}
-                                    onChange={e => setEditingItem({ ...editingItem, videoUrl: e.target.value })}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="Thumbnail URL (Image)"
-                                    className="w-full border p-2 rounded"
-                                    value={editingItem.thumbnailUrl || ''}
-                                    onChange={e => setEditingItem({ ...editingItem, thumbnailUrl: e.target.value })}
-                                />
-                                <select
-                                    className="w-full border p-2 rounded"
-                                    value={editingItem.category || 'All'}
-                                    onChange={e => setEditingItem({ ...editingItem, category: e.target.value })}
-                                >
-                                    <option value="All">All</option>
-                                    <option value="Alive">Alive</option>
-                                </select>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        id="isNew"
-                                        checked={editingItem.isNew || false}
-                                        onChange={e => setEditingItem({ ...editingItem, isNew: e.target.checked })}
-                                    />
-                                    <label htmlFor="isNew">Mark as New</label>
-                                </div>
-                            </div>
-                            <div className="flex justify-end gap-2 mt-6">
-                                <button
-                                    onClick={() => setEditingItem(null)}
-                                    className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleSaveItem}
-                                    className="px-4 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600"
-                                >
-                                    Save
-                                </button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
-
-            {/* Player Modal */}
-            <AnimatePresence>
-                {selectedItem && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/80 backdrop-blur-sm"
-                        onClick={() => setSelectedItem(null)}
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.9, opacity: 0 }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="bg-white rounded-3xl overflow-hidden w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh]"
-                        >
-                            {/* Modal Header */}
-                            <div className="flex items-center justify-between p-4 border-b border-gray-100 shrink-0">
-                                <div>
-                                    <h2 className="font-bold text-lg">{selectedItem.title}</h2>
-                                    <p className="text-xs text-gray-500">No. {selectedItem.id}</p>
-                                </div>
-                                <button
-                                    onClick={() => setSelectedItem(null)}
-                                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                                >
-                                    <FaTimes />
-                                </button>
-                            </div>
-
-                            {/* Player Content */}
-                            <div className="flex-1 bg-black relative min-h-[300px] md:min-h-[500px]">
-                                {selectedItem.videoUrl ? (
-                                    <iframe
-                                        className="w-full h-full absolute inset-0"
-                                        src={(function () {
-                                            let url = selectedItem.videoUrl!;
-                                            const isYoutube = url.includes('youtube') || url.includes('youtu.be');
-                                            const isSoop = url.includes('sooplive.co.kr');
-
-                                            const addParam = (u: string, p: string) => u.includes('?') ? `${u}&${p}` : `${u}?${p}`;
-
-                                            if (isYoutube) {
-                                                if (!url.includes('autoplay=')) url = addParam(url, 'autoplay=1');
-                                            } else if (isSoop) {
-                                                if (!url.includes('autoPlay=')) url = addParam(url, 'autoPlay=true');
-                                                if (!url.includes('mutePlay=')) url = addParam(url, 'mutePlay=false');
-                                            }
-                                            return url;
-                                        })()}
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                        allowFullScreen
-                                        title={selectedItem.title}
-                                    />
-                                ) : (
-                                    <div className="flex items-center justify-center w-full h-full">
-                                        <div className="relative">
-                                            <div className="flex items-end gap-1 h-32">
-                                                {[...Array(20)].map((_, i) => (
-                                                    <motion.div
-                                                        key={i}
-                                                        animate={{ height: ['20%', '100%', '40%'] }}
-                                                        transition={{
-                                                            duration: 0.5 + Math.random() * 0.5,
-                                                            repeat: Infinity,
-                                                            repeatType: 'reverse'
-                                                        }}
-                                                        className="w-2 bg-gradient-to-t from-pink-500 to-purple-500 rounded-full"
+                                            </td>
+                                            <td className="px-6 py-4 w-48">
+                                                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full transition-all duration-500 ${idx === 0 ? 'bg-gradient-to-r from-yellow-400 to-orange-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-orange-700' : 'bg-pink-500'}`}
+                                                        style={{ width: `${(bj.totalBalloons / (bjStats[0].totalBalloons || 1)) * 100}%` }}
                                                     />
-                                                ))}
-                                            </div>
-                                            <FaPlay className="text-white/50 text-6xl absolute inset-0 m-auto" />
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-right font-bold text-gray-800 group-hover:text-pink-600 transition-colors">
+                                                {bj.totalBalloons.toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Recent Logs */}
+                    <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-pink-200/40 shadow-xl overflow-hidden flex flex-col h-[600px]">
+                        <div className="p-6 border-b border-pink-100 flex justify-between items-center bg-gradient-to-r from-pink-50/50 to-purple-50/50 sticky top-0 z-10 shrink-0">
+                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                ⚡ 실시간 후원 로그
+                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse ml-1"></span>
+                            </h2>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowAll(!showAll)}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors ${showAll
+                                        ? 'bg-pink-500 text-white border-pink-500'
+                                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                                >
+                                    {showAll ? '접기' : '전체보기'}
+                                </button>
+                                <input
+                                    type="text"
+                                    placeholder="검색..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-pink-300 focus:outline-none w-32"
+                                />
+                            </div>
+                        </div>
+                        <div className="overflow-y-auto flex-1 p-4 space-y-2 relative scrollbar-thin scrollbar-thumb-pink-300">
+                            {donations
+                                .filter(d =>
+                                    (d.ballonUserName && d.ballonUserName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                                    (d.targetBjName && d.targetBjName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                                    (d.message && d.message.toLowerCase().includes(searchTerm.toLowerCase()))
+                                )
+                                .slice(0, showAll ? undefined : 100)
+                                .map((donation, idx) => (
+                                    <div key={`${donation.messageId}-${idx}`} className="px-3 py-2 hover:bg-pink-50/50 transition-colors border-b border-pink-100/30 last:border-0">
+                                        <div className="flex items-center gap-3 text-sm">
+                                            <span className="text-gray-500 font-mono text-xs min-w-[130px]">
+                                                {donation.createDate}
+                                            </span>
+                                            <span className="text-gray-400">/</span>
+                                            <span className="text-blue-600 font-mono text-xs min-w-[60px]">
+                                                {donation.relativeTime || '-'}
+                                            </span>
+                                            <span className="text-gray-400">/</span>
+                                            <span className="font-bold text-gray-800 min-w-[100px] truncate">
+                                                {donation.ballonUserName}
+                                            </span>
+                                            <span className="text-gray-400">/</span>
+                                            <span className="text-yellow-600 font-black min-w-[60px]">
+                                                {donation.ballonCount.toLocaleString()}개
+                                            </span>
+                                            <span className="text-gray-400">/</span>
+                                            <span className="text-gray-600 flex-1 truncate">
+                                                {donation.message || '-'}
+                                            </span>
                                         </div>
                                     </div>
-                                )}
-                            </div>
+                                ))}
+                        </div>
+                    </div>
+                </div>
 
-                            {/* Modal Footer / Controls */}
-                            <div className="p-6 shrink-0 bg-white">
-                                <div className="w-full h-1 bg-gray-100 rounded-full mb-4 overflow-hidden">
-                                    <div className="h-full w-1/3 bg-gradient-to-r from-pink-500 to-purple-500" />
+                {/* User Ranking Section */}
+                <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-pink-200/40 shadow-xl overflow-hidden">
+                    <div className="p-6 border-b border-pink-100 bg-gradient-to-r from-pink-50/50 to-purple-50/50">
+                        <h2 className="text-xl font-bold text-gray-800">💰 큰손 랭킹 (Top 10)</h2>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 p-6">
+                        {userStats.slice(0, 10).map((user, idx) => (
+                            <div key={user.userName} className="bg-gradient-to-br from-pink-50/50 to-purple-50/50 p-4 rounded-2xl border border-pink-200/40 flex flex-col items-center text-center hover:border-pink-300/60 transition-all hover:scale-105">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold mb-2 ${idx === 0 ? 'bg-yellow-500 text-white' : idx === 1 ? 'bg-gray-400 text-white' : idx === 2 ? 'bg-orange-700 text-white' : 'bg-pink-500 text-white'}`}>
+                                    {idx + 1}
                                 </div>
-                                <div className="flex justify-center gap-6 text-gray-600">
-                                    <button className="hover:text-pink-600"><FaStar /></button>
-                                    <button className="hover:text-pink-600 text-xl"><FaPlay /></button>
-                                </div>
+                                <p className="font-bold text-gray-700 truncate w-full mb-1">{user.userName}</p>
+                                <p className="text-pink-600 font-bold">{user.totalBalloons.toLocaleString()}</p>
                             </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                        ))}
+                        {userStats.length === 0 && (
+                            <div className="col-span-5 text-center text-gray-500 py-8">
+                                데이터 집계중입니다...
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+            </main>
+
+            {/* 상세 내역 모달 */}
+            {selectedBj && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col animate-in fade-in zoom-in duration-200">
+                        {/* 모달 헤더 */}
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-pink-50 to-purple-50 rounded-t-3xl">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                    <span className="text-pink-600">{selectedBj.bjName}</span>
+                                    <span>후원 내역</span>
+                                </h2>
+                                <p className="text-gray-500 text-sm mt-1">
+                                    총 <span className="font-bold text-gray-800">{selectedBj.totalBalloons.toLocaleString()}</span>개
+                                    (<span className="font-bold text-gray-800">{selectedBj.donationCount.toLocaleString()}</span>건)
+                                </p>
+                            </div>
+                            <button
+                                onClick={closeDetailModal}
+                                className="p-2 hover:bg-white rounded-full transition-colors text-gray-500 hover:text-gray-800"
+                            >
+                                <IoClose size={24} />
+                            </button>
+                        </div>
+
+                        {/* 모달 바디 (테이블) */}
+                        <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50">
+                            {bjDonations.length > 0 ? (
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-gray-50 text-gray-600 border-b border-gray-200 sticky top-0">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left">날짜</th>
+                                                <th className="px-4 py-3 text-left">시간</th>
+                                                <th className="px-4 py-3 text-left">후원자</th>
+                                                <th className="px-4 py-3 text-right">개수</th>
+                                                <th className="px-4 py-3 text-left">메시지</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {bjDonations.map((d, idx) => (
+                                                <tr key={idx} className="hover:bg-pink-50/30 transition-colors">
+                                                    <td className="px-4 py-3 text-gray-500 text-xs w-32">{d.createDate}</td>
+                                                    <td className="px-4 py-3 text-blue-600 text-xs w-24 font-mono">{d.relativeTime || '-'}</td>
+                                                    <td className="px-4 py-3 font-bold text-gray-800 w-32 truncate max-w-[150px]">{d.ballonUserName}</td>
+                                                    <td className="px-4 py-3 text-right font-bold text-pink-600 w-24">{d.ballonCount.toLocaleString()}</td>
+                                                    <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{d.message || '-'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="text-center py-12 text-gray-500">
+                                    데이터가 없습니다.
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 모달 푸터 */}
+                        <div className="p-6 border-t border-gray-100 bg-white rounded-b-3xl flex justify-end gap-3">
+                            <button
+                                onClick={closeDetailModal}
+                                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors font-bold"
+                            >
+                                닫기
+                            </button>
+                            <button
+                                onClick={handleDownloadExcel}
+                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-colors font-bold flex items-center gap-2 shadow-lg shadow-green-200"
+                            >
+                                <IoDownload />
+                                엑셀 저장
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <Footer />
         </div>
     );
 }

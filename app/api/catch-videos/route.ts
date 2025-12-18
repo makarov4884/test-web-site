@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
             // Scrape data
             // @ts-ignore
             scrapedVideos = await page.evaluate(() => {
-                const videos = [];
+                const videos: any[] = [];
                 // Try multiple selectors
                 const anchors = Array.from(document.querySelectorAll('a[href*="/catch/"]'));
 
