@@ -1,209 +1,165 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-import { DonationData, BjStats, UserStats, RealtimeStats, BjKeywordMapping } from '@/types/festival';
+import { supabaseAdmin } from '@/lib/supabase';
+import { BjStats, UserStats, RealtimeStats, BjKeywordMapping, DonationData } from '@/types/festival';
 
-const dataFilePath = path.join(process.cwd(), 'data', 'keywords.json');
-const manualMappingsPath = path.join(process.cwd(), 'data', 'manual_mappings.json');
-
-const getKeywordMappings = (): BjKeywordMapping[] => {
-    if (!fs.existsSync(dataFilePath)) return [];
-    try {
-        const fileContent = fs.readFileSync(dataFilePath, 'utf-8');
-        return JSON.parse(fileContent);
-    } catch (e) {
-        console.error('Failed to parse keywords.json:', e);
-        return [];
-    }
-};
-
-const getManualMappings = (): Record<string, string> => {
-    if (!fs.existsSync(manualMappingsPath)) return {};
-    try {
-        const fileContent = fs.readFileSync(manualMappingsPath, 'utf-8');
-        return JSON.parse(fileContent);
-    } catch (e) {
-        console.error('Failed to parse manual_mappings.json:', e);
-        return {};
-    }
-};
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function POST(request: Request) {
     try {
-        const body = await request.json();
-        const donations: DonationData[] = Array.isArray(body) ? body : (body.donations || []);
+        // 클라이언트에서 보낸 데이터는 무시하고 DB에서 직접 조회 (신뢰성 확보)
 
-        if (!Array.isArray(donations)) {
-            throw new Error('Invalid data format');
+        // 1. 키워드 가져오기
+        const { data: keywordsData, error: keywordError } = await supabaseAdmin
+            .from('keywords')
+            .select('bj_name, keywords');
+
+        if (keywordError) {
+            console.error('Keyword Fetch Error:', keywordError);
+            throw keywordError;
         }
 
-        const keywordMappings = getKeywordMappings();
-        const manualMappings = getManualMappings();
-        const bjStatsMap = new Map<string, BjStats>();
-        const userStatsMap = new Map<string, UserStats>();
+        const bjKeywords: BjKeywordMapping[] = (keywordsData || []).map((item: any) => ({
+            bjName: item.bj_name,
+            keywords: item.keywords || []
+        }));
 
-        // keywords.json의 스트리머로 초기화
-        keywordMappings.forEach(mapping => {
-            bjStatsMap.set(mapping.bjName, {
-                bjName: mapping.bjName,
+        // 2. 전체 후원 내역 가져오기 (DB)
+        const { data: dbDonations, error: dbError } = await supabaseAdmin
+            .from('donations')
+            .select('*')
+            .order('create_date', { ascending: false }); // 최신순
+
+        if (dbError) {
+            console.error('Donation Fetch Error:', dbError);
+            throw dbError;
+        }
+
+        // DB 데이터를 내부 포맷(CamelCase)으로 변환
+        const donations: DonationData[] = (dbDonations || []).map((item: any) => ({
+            messageId: item.message_id,
+            createDate: item.create_date,
+            relativeTime: item.relative_time,
+            ballonUserName: item.ballon_user_name,
+            ballonCount: item.ballon_count,
+            targetBjName: item.target_bj_name,
+            message: item.message,
+            isCancel: item.is_cancel
+        }));
+
+        // 3. 통계 계산 로직 (기존과 동일)
+        const bjStats = new Map<string, BjStats>();
+        const userStats = new Map<string, UserStats>();
+        let totalCount = 0;
+        let totalBalloons = 0;
+
+        // BJ 목록 초기화
+        bjKeywords.forEach(bj => {
+            bjStats.set(bj.bjName, {
+                bjName: bj.bjName,
                 totalBalloons: 0,
                 donationCount: 0,
-                topDonor: '-',
-                topDonorAmount: 0,
-                lastUpdate: new Date(0).toISOString()
+                percent: 0
             });
         });
 
-        // 미분류 항목 추가
-        bjStatsMap.set('미분류', {
+        // 미분류 초기화
+        bjStats.set('미분류', {
             bjName: '미분류',
             totalBalloons: 0,
             donationCount: 0,
-            topDonor: '-',
-            topDonorAmount: 0,
-            lastUpdate: new Date(0).toISOString()
+            percent: 0
         });
 
+        // 집계 시작
         donations.forEach(donation => {
-            let bjName = '미분류';
-            let matched = false;
+            if (donation.isCancel) return; // 취소된 건 제외
 
-            // 스트리머 이름 정규화 함수
-            const normalizeBjName = (name: string): string => {
-                if (!name || name === '미분류') return '미분류';
+            const count = parseInt(String(donation.ballonCount));
+            totalCount++;
+            totalBalloons += count;
 
-                // 1. keywords.json의 bjName과 정확히 일치하는지 확인 (최우선)
-                const exactMatch = keywordMappings.find(m => m.bjName === name);
-                if (exactMatch) {
-                    return exactMatch.bjName;
-                }
+            // BJ 집계
+            let targetBj = donation.targetBjName;
 
-                // 2. 특수문자, 숫자, 공백 제거하여 순수 한글만 추출 (기존 로직 유지 - 보조 수단)
-                const cleanName = name.replace(/[^가-힣]/g, '');
-
-                // keywords.json에서 매칭되는 스트리머 찾기
-                for (const mapping of keywordMappings) {
-                    const allKeywords = [mapping.bjName, ...mapping.keywords];
-                    // 키워드가 cleanName에 포함되어 있는지 확인
-                    if (allKeywords.some(keyword => keyword && cleanName.includes(keyword))) {
-                        return mapping.bjName;
-                    }
-                }
-
-                // 매칭 안 되면 원본 반환
-                return name;
-            };
-
-            // 1. targetBjName 확인 (최우선 - crawl_data.json에 저장된 값)
-            if (donation.targetBjName && donation.targetBjName !== '미분류' && donation.targetBjName.trim() !== '') {
-                bjName = normalizeBjName(donation.targetBjName);
-                matched = true;
-            }
-
-            // 2. 키워드 매핑 - message 확인
-            if (!matched) {
-                const searchText = donation.message || '';
-
-                for (const mapping of keywordMappings) {
-                    const allKeywords = [mapping.bjName, ...mapping.keywords];
-                    if (allKeywords.some(keyword => keyword && searchText.includes(keyword))) {
-                        bjName = mapping.bjName;
-                        matched = true;
-                        break;
+            // 이름 보정 로직
+            if (!targetBj) {
+                targetBj = '미분류';
+            } else {
+                // DB에서 가져온 이름이 현재 키워드 목록에 있는지 확인
+                const isValidBj = bjKeywords.some(k => k.bjName === targetBj);
+                if (!isValidBj) {
+                    // 키워드 목록엔 없지만 혹시 '미분류'가 아니라면 -> 그냥 그 이름대로 집계 (동적 추가)
+                    // 하지만 깔끔한 통계를 위해 목록에 없으면 '미분류'로 취급할 수도 있음
+                    // 여기서는 데이터 유연성을 위해 그대로 두되, 초기화되지 않은 BJ면 초기화
+                    if (!bjStats.has(targetBj)) {
+                        bjStats.set(targetBj, {
+                            bjName: targetBj,
+                            totalBalloons: 0,
+                            donationCount: 0,
+                            percent: 0
+                        });
                     }
                 }
             }
 
-            let effectiveCount = donation.ballonCount;
+            const stat = bjStats.get(targetBj)!;
+            stat.totalBalloons += count;
+            stat.donationCount++;
 
-            const checkText = (text: string | undefined) => {
-                if (!text) return false;
-                const hangulTokens = text.replace(/[^가-힣]+/g, ' ').trim().split(/\s+/);
-                return hangulTokens.includes('마');
-            };
-
-            if (checkText(donation.message) || checkText(donation.targetBjName)) {
-                effectiveCount = -Math.abs(donation.ballonCount);
-            }
-
-            // 모든 BJ (미분류 포함) 집계
-            if (!bjStatsMap.has(bjName)) {
-                bjStatsMap.set(bjName, {
-                    bjName: bjName,
+            // 유저 집계
+            const userName = donation.ballonUserName;
+            if (!userStats.has(userName)) {
+                userStats.set(userName, {
+                    userName,
                     totalBalloons: 0,
                     donationCount: 0,
-                    topDonor: '-',
-                    topDonorAmount: 0,
-                    lastUpdate: new Date(0).toISOString()
+                    rank: 0
                 });
             }
-
-            const bjStats = bjStatsMap.get(bjName)!;
-            bjStats.totalBalloons += effectiveCount;
-            bjStats.donationCount += 1;
-
-            if (effectiveCount > 0 && effectiveCount > bjStats.topDonorAmount) {
-                bjStats.topDonor = donation.ballonUserName;
-                bjStats.topDonorAmount = effectiveCount;
-            }
-
-            if (donation.createDate > bjStats.lastUpdate) {
-                bjStats.lastUpdate = donation.createDate;
-            }
-
-            if (!userStatsMap.has(donation.ballonUserName)) {
-                userStatsMap.set(donation.ballonUserName, {
-                    userName: donation.ballonUserName,
-                    totalBalloons: 0,
-                    donationCount: 0,
-                    targetBjs: []
-                });
-            }
-
-            const userStats = userStatsMap.get(donation.ballonUserName)!;
-            userStats.totalBalloons += effectiveCount;
-            userStats.donationCount += 1;
-
-            if (bjName && !userStats.targetBjs.includes(bjName)) {
-                userStats.targetBjs.push(bjName);
-            }
+            const userStat = userStats.get(userName)!;
+            userStat.totalBalloons += count;
+            userStat.donationCount++;
         });
 
-        const bjStatsArray = Array.from(bjStatsMap.values())
+        // 정렬 및 점유율 계산
+        const sortedBjStats = Array.from(bjStats.values())
             .sort((a, b) => b.totalBalloons - a.totalBalloons);
 
-        const userStatsArray = Array.from(userStatsMap.values())
-            .sort((a, b) => b.totalBalloons - a.totalBalloons);
+        // 전체 풍선 0일 때 NaN 방지
+        const safeTotalBalloons = totalBalloons || 1;
 
-        // BJ별 합계를 더해서 총합 계산 (이미 차감 로직이 적용됨)
-        const totalBalloons = bjStatsArray.reduce((sum, bj) => sum + bj.totalBalloons, 0);
+        sortedBjStats.forEach(stat => {
+            stat.percent = parseFloat(((stat.totalBalloons / safeTotalBalloons) * 100).toFixed(1));
+        });
 
-        const realtimeStats: RealtimeStats = {
-            totalBalloons: totalBalloons,
-            totalDonations: donations.length,
-            uniqueDonors: userStatsMap.size,
-            uniqueBjs: bjStatsArray.length,
-            lastUpdate: new Date().toISOString()
+        const sortedUserStats = Array.from(userStats.values())
+            .sort((a, b) => b.totalBalloons - a.totalBalloons)
+            .slice(0, 30) // TOP 30
+            .map((stat, index) => ({
+                ...stat,
+                rank: index + 1
+            }));
+
+        const responseData: RealtimeStats = {
+            bjStats: sortedBjStats,
+            userStats: sortedUserStats,
+            totalStats: {
+                totalCount,
+                totalBalloons,
+                unclassifiedCount: bjStats.get('미분류')?.donationCount || 0,
+                unclassifiedBalloons: bjStats.get('미분류')?.totalBalloons || 0
+            },
+            recentDonations: donations.slice(0, 50)
         };
 
-        return NextResponse.json({
-            success: true,
-            bjStats: bjStatsArray,
-            userStats: userStatsArray,
-            realtimeStats,
-            timestamp: new Date().toISOString()
-        }, {
-            headers: {
-                'Cache-Control': 'no-store, no-cache, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            }
-        });
+        return NextResponse.json(responseData);
 
     } catch (error) {
-        console.error('Stats calculation error:', error);
-        return NextResponse.json({ success: false, error: 'Internal Error' }, { status: 500 });
+        console.error('Stats Error:', error);
+        return NextResponse.json(
+            { error: 'Internal Server Error' },
+            { status: 500 }
+        );
     }
 }
-
-export const dynamic = 'force-dynamic';

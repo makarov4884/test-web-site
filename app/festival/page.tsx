@@ -27,18 +27,34 @@ export default function FestivalPage() {
 
     // 스트리머 클릭 핸들러
     const handleBjClick = (bj: BjStats) => {
-        if (bj.bjName === '미분류') return; // 미분류는 별도 페이지로 이동하므로 모달 띄우지 않음
+        if (bj.bjName === '미분류') return;
 
-        // 해당 BJ의 후원 내역 필터링
-        // 1. targetBjName이 일치하거나
-        // 2. 메시지에 BJ 이름이나 키워드가 포함된 경우 (이미 백엔드에서 집계된 로직을 따름)
-        // 여기서는 targetBjName이 정확히 일치하는 것만 보여주는 것이 가장 정확함
-        // 하지만 update-bj-names.js로 일괄 업데이트했으므로 targetBjName만 확인하면 됨
-        const filtered = donations.filter(d => d.targetBjName === bj.bjName);
+        // 공백 제거 후 비교 (정확도 향상)
+        const targetName = bj.bjName.trim();
+        const filtered = donations.filter(d =>
+            (d.targetBjName && d.targetBjName.trim() === targetName)
+        );
 
         setBjDonations(filtered);
         setSelectedBj(bj);
-        setAutoRefresh(false); // 모달 열 때 자동 갱신 중지
+        setAutoRefresh(false);
+    };
+
+    // 해당 BJ의 Top 후원자 계산 함수
+    const getTopSupporters = (bjName: string) => {
+        const supporterMap = new Map<string, number>();
+
+        donations.forEach(d => {
+            if (d.targetBjName && d.targetBjName.trim() === bjName.trim()) {
+                const current = supporterMap.get(d.ballonUserName) || 0;
+                supporterMap.set(d.ballonUserName, current + d.ballonCount);
+            }
+        });
+
+        return Array.from(supporterMap.entries())
+            .map(([userName, total]) => ({ userName, total }))
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 5); // TOP 5만
     };
 
     // 엑셀 다운로드 핸들러
@@ -415,13 +431,13 @@ export default function FestivalPage() {
             {/* 상세 내역 모달 */}
             {selectedBj && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col animate-in fade-in zoom-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col animate-in fade-in zoom-in duration-200">
                         {/* 모달 헤더 */}
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-pink-50 to-purple-50 rounded-t-3xl">
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-pink-50 to-purple-50 rounded-t-3xl shrink-0">
                             <div>
                                 <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                                     <span className="text-pink-600">{selectedBj.bjName}</span>
-                                    <span>후원 내역</span>
+                                    <span>상세 리포트</span>
                                 </h2>
                                 <p className="text-gray-500 text-sm mt-1">
                                     총 <span className="font-bold text-gray-800">{selectedBj.totalBalloons.toLocaleString()}</span>개
@@ -436,51 +452,84 @@ export default function FestivalPage() {
                             </button>
                         </div>
 
-                        {/* 모달 바디 (테이블) */}
-                        <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50">
-                            {bjDonations.length > 0 ? (
-                                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-gray-50 text-gray-600 border-b border-gray-200 sticky top-0">
-                                            <tr>
-                                                <th className="px-4 py-3 text-left">날짜</th>
-                                                <th className="px-4 py-3 text-left">시간</th>
-                                                <th className="px-4 py-3 text-left">후원자</th>
-                                                <th className="px-4 py-3 text-right">개수</th>
-                                                <th className="px-4 py-3 text-left">메시지</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                            {bjDonations.map((d, idx) => (
-                                                <tr key={idx} className="hover:bg-pink-50/30 transition-colors">
-                                                    <td className="px-4 py-3 text-gray-500 text-xs w-32">{d.createDate}</td>
-                                                    <td className="px-4 py-3 text-blue-600 text-xs w-24 font-mono">{d.relativeTime || '-'}</td>
-                                                    <td className="px-4 py-3 font-bold text-gray-800 w-32 truncate max-w-[150px]">{d.ballonUserName}</td>
-                                                    <td className="px-4 py-3 text-right font-bold text-pink-600 w-24">{d.ballonCount.toLocaleString()}</td>
-                                                    <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{d.message || '-'}</td>
+                        <div className="flex-1 overflow-y-auto bg-gray-50/50 p-6 space-y-6">
+
+                            {/* 1. 이 방의 큰손들 (Top Supporters) */}
+                            <div className="bg-white rounded-2xl shadow-sm border border-pink-100 overflow-hidden">
+                                <div className="px-5 py-3 border-b border-gray-100 bg-pink-50/30">
+                                    <h3 className="font-bold text-gray-700 flex items-center gap-2">
+                                        👑 이 방의 회장님 (Top 5)
+                                    </h3>
+                                </div>
+                                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                                    {getTopSupporters(selectedBj.bjName).map((supporter, idx) => (
+                                        <div key={idx} className={`flex flex-col items-center p-3 rounded-xl border ${idx === 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>
+                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1 ${idx === 0 ? 'bg-yellow-500 text-white' : 'bg-gray-400 text-white'}`}>
+                                                {idx + 1}
+                                            </div>
+                                            <span className="font-bold text-gray-800 text-sm truncate w-full text-center">
+                                                {supporter.userName}
+                                            </span>
+                                            <span className="text-pink-600 text-xs font-bold">
+                                                {supporter.total.toLocaleString()}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    {getTopSupporters(selectedBj.bjName).length === 0 && (
+                                        <div className="col-span-full text-center text-gray-400 text-sm">데이터 없음</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 2. 전체 후원 목록 */}
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                                <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                                    <h3 className="font-bold text-gray-700">📜 전체 후원 기록</h3>
+                                </div>
+                                {bjDonations.length > 0 ? (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-white text-gray-500 border-b border-gray-100">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left w-24">날짜</th>
+                                                    <th className="px-4 py-3 text-left w-20">시간</th>
+                                                    <th className="px-4 py-3 text-left">후원자</th>
+                                                    <th className="px-4 py-3 text-right w-24">개수</th>
+                                                    <th className="px-4 py-3 text-left">메시지</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : (
-                                <div className="text-center py-12 text-gray-500">
-                                    데이터가 없습니다.
-                                </div>
-                            )}
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {bjDonations.map((d, idx) => (
+                                                    <tr key={idx} className="hover:bg-pink-50/20 transition-colors">
+                                                        <td className="px-4 py-2 text-gray-400 text-xs">{d.createDate.split(' ')[0].slice(5)}</td>
+                                                        <td className="px-4 py-2 text-blue-500 text-xs font-mono">{d.relativeTime || '-'}</td>
+                                                        <td className="px-4 py-2 font-medium text-gray-700">{d.ballonUserName}</td>
+                                                        <td className="px-4 py-2 text-right font-bold text-pink-500">{d.ballonCount.toLocaleString()}</td>
+                                                        <td className="px-4 py-2 text-gray-500 text-xs max-w-xs truncate">{d.message || '-'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-10 text-gray-400">
+                                        후원 내역이 없습니다.
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* 모달 푸터 */}
-                        <div className="p-6 border-t border-gray-100 bg-white rounded-b-3xl flex justify-end gap-3">
+                        <div className="p-5 border-t border-gray-100 bg-white rounded-b-3xl flex justify-end gap-3 shrink-0">
                             <button
                                 onClick={closeDetailModal}
-                                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors font-bold"
+                                className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors font-bold text-sm"
                             >
                                 닫기
                             </button>
                             <button
                                 onClick={handleDownloadExcel}
-                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-colors font-bold flex items-center gap-2 shadow-lg shadow-green-200"
+                                className="px-5 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors font-bold flex items-center gap-2 shadow-lg shadow-green-100 text-sm"
                             >
                                 <IoDownload />
                                 엑셀 저장

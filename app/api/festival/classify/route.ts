@@ -1,86 +1,52 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export async function POST(request: Request) {
     try {
-        const { messageId, streamerName } = await request.json();
+        const { messageId, bjName } = await request.json();
 
-        if (!messageId || !streamerName) {
-            return NextResponse.json({ success: false, error: 'Missing parameters' }, { status: 400 });
+        if (!messageId || !bjName) {
+            return NextResponse.json(
+                { error: 'Missing required fields' },
+                { status: 400 }
+            );
         }
 
-        // keywords.json 읽기
-        const keywordsPath = path.join(process.cwd(), 'data', 'keywords.json');
-        let normalizedStreamerName = streamerName;
+        // Supabase DB 업데이트
+        const { data, error } = await supabaseAdmin
+            .from('donations')
+            .update({ target_bj_name: bjName })
+            .eq('message_id', messageId)
+            .select(); // 업데이트된 데이터 반환
 
-        if (fs.existsSync(keywordsPath)) {
-            try {
-                const keywordsContent = fs.readFileSync(keywordsPath, 'utf-8');
-                const keywords = JSON.parse(keywordsContent);
-
-                // streamerName이 keywords에 있는 bjName과 일치하는지 확인
-                const matchedBj = keywords.find((k: any) => k.bjName === streamerName);
-                if (matchedBj) {
-                    normalizedStreamerName = matchedBj.bjName;
-                }
-            } catch (e) {
-                console.error('Failed to parse keywords.json:', e);
-            }
+        if (error) {
+            console.error('Update Error:', error);
+            throw error;
         }
 
-        // crawl_data.json 파일 직접 수정
-        const crawlPath = path.join(process.cwd(), 'data', 'crawl_data.json');
-
-        if (!fs.existsSync(crawlPath)) {
-            return NextResponse.json({ success: false, error: 'Data file not found' }, { status: 404 });
+        // 업데이트 결과 확인
+        if (!data || data.length === 0) {
+            return NextResponse.json(
+                { error: 'Donation not found' },
+                { status: 404 }
+            );
         }
 
-        // 파일 읽기 (캐시 무효화를 위해 동기적으로 읽기)
-        delete require.cache[crawlPath]; // Node.js 캐시 무효화
-        const fileContent = fs.readFileSync(crawlPath, 'utf-8');
-        const jsonData = JSON.parse(fileContent);
-
-        // 해당 messageId를 찾아서 targetBjName 업데이트
-        let found = false;
-        let updatedDonation: any = null;
-
-        if (jsonData.data && Array.isArray(jsonData.data)) {
-            jsonData.data = jsonData.data.map((item: any) => {
-                if (item.messageId === messageId) {
-                    found = true;
-                    updatedDonation = {
-                        ...item,
-                        targetBjName: normalizedStreamerName
-                    };
-                    return updatedDonation;
-                }
-                return item;
-            });
-        }
-
-        if (!found) {
-            return NextResponse.json({ success: false, error: 'Message not found' }, { status: 404 });
-        }
-
-        // 파일에 다시 저장
-        fs.writeFileSync(crawlPath, JSON.stringify(jsonData, null, 2));
-
-        console.log(`✅ Classification successful: ${messageId} -> ${normalizedStreamerName} (${updatedDonation?.ballonCount} balloons)`);
+        const updatedItem = data[0];
 
         return NextResponse.json({
             success: true,
-            updated: {
-                messageId,
-                streamerName: normalizedStreamerName,
-                ballonCount: updatedDonation?.ballonCount
+            updatedDonation: {
+                messageId: updatedItem.message_id,
+                targetBjName: updatedItem.target_bj_name
             }
         });
+
     } catch (error) {
-        console.error('Error saving classification:', error);
-        return NextResponse.json({ success: false, error: 'Internal Error' }, { status: 500 });
+        console.error('Classify Error:', error);
+        return NextResponse.json(
+            { error: 'Internal server error' },
+            { status: 500 }
+        );
     }
 }
-
-export const dynamic = 'force-dynamic';
-
