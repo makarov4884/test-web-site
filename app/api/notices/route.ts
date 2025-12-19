@@ -18,6 +18,7 @@ export async function GET(request: Request) {
         // 프론트엔드 포맷으로 변환
         const formattedNotices = (notices || []).map(n => ({
             id: n.id.toString(),
+            streamerId: n.bj_field,
             streamerName: n.bj_name,
             title: n.title,
             url: n.link,

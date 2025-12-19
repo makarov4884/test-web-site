@@ -10,9 +10,10 @@ interface Notice {
     streamerId: string;
     streamerName: string;
     title: string;
-    content: string;
+    content?: string;
     date: string;
     url: string;
+    isFixed?: boolean;
 }
 
 interface Streamer {
@@ -42,7 +43,7 @@ export default function NoticePage() {
             // 스트리머 목록과 공지사항 동시 가져오기
             const [streamersRes, noticesRes] = await Promise.all([
                 fetch('/api/streamers/list'),
-                fetch(`/api/notices/crawl${force ? '?force=true' : ''}`)
+                fetch('/api/notices')
             ]);
 
             const streamersData = await streamersRes.json();
@@ -52,8 +53,9 @@ export default function NoticePage() {
                 setStreamers(streamersData.streamers);
             }
 
-            if (noticesData.success) {
-                setNotices(noticesData.notices);
+            // /api/notices는 배열을 직접 반환
+            if (Array.isArray(noticesData)) {
+                setNotices(noticesData);
             }
 
             // 사용자의 요청대로 새로고침 시 페이지 리로드
