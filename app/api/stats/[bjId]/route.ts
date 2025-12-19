@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
@@ -100,15 +99,15 @@ export async function GET(
             bjId,
             name: targetBjName,
             profileImage: `https://stimg.sooplive.co.kr/LOGO/${bjId.slice(0, 2)}/${bjId}/m/${bjId}.webp`,
-            subscribers: crawledStats?.broadcast_time || '-', // 방송시간으로 대체
+            subscribers: crawledStats?.broadcast_time || '-',
             fans: '-',
-            totalViewers: crawledStats?.max_viewers || '-', // 최대 시청자
+            totalViewers: crawledStats?.max_viewers || '-',
             lastUpdated: new Date().toISOString(),
             // 집계된 통계
             dailyStar: '0',
-            monthlyStar: crawledStar !== '0' ? crawledStar : totalStar.toLocaleString(), // 크롤링 된 값이 유효하면 우선 사용
-            totalStar: crawledStar !== '0' ? crawledStar : totalStar.toLocaleString(),
-            fanCount: supporterMap.size.toLocaleString(), // 참여 인원수 (집계된 것 기준)
+            monthlyStar: totalStar.toLocaleString(), // DB 집계값 사용 (Bcraping엔 월별 별풍선 데이터 없음)
+            totalStar: totalStar.toLocaleString(),   // DB 집계값 사용
+            fanCount: crawledStar !== '0' ? crawledStar : supporterMap.size.toLocaleString(), // 크롤링 된 팬클럽 수 우선, 없으면 참여자 수
             rankingList
         };
 
