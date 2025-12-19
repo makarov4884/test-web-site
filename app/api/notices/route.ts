@@ -6,11 +6,10 @@ export const revalidate = 0;
 
 export async function GET(request: Request) {
     try {
-        // Supabase DB에서 공지사항 가져오기 (2024-09-17 이후만)
+        // Supabase DB에서 공지사항 가져오기 (모든 공지사항)
         const { data: notices, error } = await supabaseAdmin
             .from('notices')
             .select('*')
-            .gte('date', '2024-09-17') // 9월 17일 이후만
             .order('date', { ascending: false }) // 날짜 내림차순
             .limit(100); // 최근 100개만
 
