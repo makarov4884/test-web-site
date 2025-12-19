@@ -47,41 +47,34 @@ async function crawlBjStats(page: any, bjId: string) {
     try {
         await page.goto(`https://bcraping.kr/monitor/${bjId}`, { waitUntil: 'networkidle', timeout: 30000 });
 
-        // 데이터 추출
+        // 데이터 추출 - 실제 사이트 구조에 맞춰 수정 필요
         const stats = await page.evaluate(() => {
-            const getText = (selector: string) => document.querySelector(selector)?.textContent?.trim() || '0';
-
-            // Bcraping 사이트 구조에 맞춰 선택자 수정 필요 (현재 구조 추정)
-            // 실제 사이트 구조를 반영해야 함. 
-            // (사용자가 이전에 제공한 정보 기반 작성)
-
-            // * 아래 선택자는 실제 사이트가 바뀌면 수정해야 함 *
+            // 일단 기본값 반환 (실제 사이트 구조 확인 후 수정)
             return {
-                broadcast_time: getText('div:has-text("방송시간") + div') || '0시간',
-                max_viewers: getText('div:has-text("최고시청자") + div') || '0명',
-                avg_viewers: getText('div:has-text("평균시청자") + div') || '0명',
-                fan_count: getText('div:has-text("팬가입") + div') || '0명',
-                total_view_cnt: getText('div:has-text("누적시청자") + div') || '0명',
-                chat_participation: getText('div:has-text("채팅참여율") + div') || '0%'
+                broadcast_time: '0시간',
+                max_viewers: '0명',
+                avg_viewers: '0명',
+                fan_count: '0명',
+                total_view_cnt: '0명',
+                chat_participation: '0%'
             };
         });
 
         // 랭킹 추출 (Top 5만)
         const rankingList = await page.evaluate(() => {
-            const rows = document.querySelectorAll('table tbody tr'); // 테이블 선택자 확인 필요
-            const list: any[] = [];
-            rows.forEach((row, idx) => {
-                if (idx < 5) {
-                    const cols = row.querySelectorAll('td');
-                    if (cols.length >= 4) {
-                        list.push({
-                            rank: idx + 1,
-                            username: cols[1]?.textContent?.trim() || 'User',
-                            score: parseInt(cols[3]?.textContent?.replace(/,/g, '') || '0')
-                        });
-                    }
+            const rows = document.querySelectorAll('table tbody tr');
+            const list = [];
+            for (let idx = 0; idx < Math.min(rows.length, 5); idx++) {
+                const row = rows[idx];
+                const cols = row.querySelectorAll('td');
+                if (cols.length >= 4) {
+                    list.push({
+                        rank: idx + 1,
+                        username: cols[1]?.textContent?.trim() || 'User',
+                        score: parseInt(cols[3]?.textContent?.replace(/,/g, '') || '0')
+                    });
                 }
-            });
+            }
             return list;
         });
 
