@@ -124,7 +124,6 @@ async function crawlNotices() {
                     streamer_id: notice.streamerId,
                     streamer_name: notice.streamerName,
                     title: notice.title,
-                    content: notice.content,
                     date: notice.date,
                     url: notice.url,
                     created_at: new Date().toISOString()
