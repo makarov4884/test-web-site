@@ -52,7 +52,7 @@ async function crawlBjStats(page: any, bjId: string) {
 
         // 데이터 추출 - XPath 기반
         const stats = await page.evaluate(() => {
-            const getByXPath = (xpath: string): string => {
+            const getByXPath = (xpath) => {
                 const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                 return result.singleNodeValue?.textContent?.trim() || '0';
             };
