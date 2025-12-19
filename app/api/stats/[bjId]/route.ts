@@ -36,28 +36,31 @@ export async function GET(
         // 기존 로직처럼 'bjName'이 한글 닉네임이라고 가정하고 검색 시도.
 
         // 2-1. keywords 테이블에서 매핑된 정확한 한글 이름 찾기 시도
-        // (만약 bjId가 "tmxm" 같은 영어 아이디라면 매핑 테이블이 있어야 함)
-        // 현재 마이그레이션된 keywords 테이블 구조: id, bj_name, keywords(배열)
-        // 영문 ID가 keywords 배열에 포함되어 있다고 가정.
-
         let targetBjName = bjId; // 기본값
         const { data: matchBj } = await supabaseAdmin
             .from('keywords')
             .select('bj_name')
-            .contains('keywords', [bjId]) // keywords 배열에 bjId가 포함된 행 찾기
+            .contains('keywords', [bjId])
             .limit(1)
             .maybeSingle();
 
         if (matchBj) targetBjName = matchBj.bj_name;
 
-        // 3. 통계 집계
-        // 해당 BJ의 모든 후원 내역 조회 (LIMIT 없이 가져와서 계산 - 데이터가 아주 많으면 RPC 권장)
+        // 3. 통계 집계 (donations 테이블 집계)
         const { data: donations, error } = await supabaseAdmin
             .from('donations')
             .select('ballon_count, ballon_user_name')
             .eq('target_bj_name', targetBjName);
 
         if (error) throw error;
+
+        // 4. 크롤링된 실시간 통계 가져오기 (streamer_stats 테이블)
+        const { data: crawledStats } = await supabaseAdmin
+            .from('streamer_stats')
+            .select('*')
+            .eq('bj_id', bjId) // bjId로 검색
+            .limit(1)
+            .maybeSingle();
 
         let totalStar = 0;
         let totalCount = 0;
@@ -71,13 +74,20 @@ export async function GET(
             supporterMap.set(d.ballon_user_name, current + d.ballon_count);
         });
 
+        // 크롤링된 별풍선 개수가 있으면 그것을 사용 (더 정확할 수 있음)
+        // 단, 포맷이 '39,487명' 처럼 되어있을 수 있으므로 숫자만 추출
+        let crawledStar = '0';
+        if (crawledStats && crawledStats.fan_count) {
+            crawledStar = crawledStats.fan_count;
+        }
+
         // 4. 랭킹 생성
         const rankingList = Array.from(supporterMap.entries())
             .map(([username, count], idx) => ({
-                rank: 0, // 나중에 채움
+                rank: 0,
                 username,
-                userId: '', // 정보 없음
-                score: count, // 별풍선 개수
+                userId: '',
+                score: count,
                 totalScore: count,
                 image: null
             }))
@@ -90,15 +100,15 @@ export async function GET(
             bjId,
             name: targetBjName,
             profileImage: `https://stimg.sooplive.co.kr/LOGO/${bjId.slice(0, 2)}/${bjId}/m/${bjId}.webp`,
-            subscribers: '-', // 크롤링 없으므로 알 수 없음
+            subscribers: crawledStats?.broadcast_time || '-', // 방송시간으로 대체
             fans: '-',
-            totalViewers: '-',
+            totalViewers: crawledStats?.max_viewers || '-', // 최대 시청자
             lastUpdated: new Date().toISOString(),
             // 집계된 통계
             dailyStar: '0',
-            monthlyStar: totalStar.toLocaleString(),
-            totalStar: totalStar.toLocaleString(),
-            fanCount: supporterMap.size.toLocaleString(),
+            monthlyStar: crawledStar !== '0' ? crawledStar : totalStar.toLocaleString(), // 크롤링 된 값이 유효하면 우선 사용
+            totalStar: crawledStar !== '0' ? crawledStar : totalStar.toLocaleString(),
+            fanCount: supporterMap.size.toLocaleString(), // 참여 인원수 (집계된 것 기준)
             rankingList
         };
 
