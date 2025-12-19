@@ -47,31 +47,39 @@ async function crawlBjStats(page: any, bjId: string) {
     try {
         await page.goto(`https://bcraping.kr/monitor/${bjId}`, { waitUntil: 'networkidle', timeout: 30000 });
 
-        // 데이터 추출 - 실제 사이트 구조에 맞춰 수정 필요
+        // 데이터가 로딩될 때까지 대기 (스켈레톤 UI 이후)
+        await page.waitForSelector('div:has-text("누적 방송 시간")', { timeout: 10000 }).catch(() => { });
+
+        // 데이터 추출 - XPath 기반
         const stats = await page.evaluate(() => {
-            // 일단 기본값 반환 (실제 사이트 구조 확인 후 수정)
+            const getByXPath = (xpath: string): string => {
+                const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                return result.singleNodeValue?.textContent?.trim() || '0';
+            };
+
             return {
-                broadcast_time: '0시간',
-                max_viewers: '0명',
-                avg_viewers: '0명',
-                fan_count: '0명',
-                total_view_cnt: '0명',
-                chat_participation: '0%'
+                broadcast_time: getByXPath('//div[contains(text(), "누적 방송 시간")]/following-sibling::div'),
+                max_viewers: getByXPath('//div[contains(text(), "최고 시청자")]/following-sibling::div/span[1]'),
+                avg_viewers: getByXPath('//div[contains(text(), "평균 시청자")]/following-sibling::div/span[1]'),
+                fan_count: getByXPath('//div[contains(text(), "팬클럽 수")]/following-sibling::div'),
+                total_view_cnt: getByXPath('//div[contains(text(), "시청자수")]/following-sibling::div'),
+                chat_participation: getByXPath('//div[contains(text(), "채팅 참여율")]/following-sibling::div/span[1]')
             };
         });
 
-        // 랭킹 추출 (Top 5만)
+        // 랭킹 추출 (Top 5만) - 랭킹 탭으로 이동 필요할 수도 있음
         const rankingList = await page.evaluate(() => {
             const rows = document.querySelectorAll('table tbody tr');
             const list = [];
             for (let idx = 0; idx < Math.min(rows.length, 5); idx++) {
                 const row = rows[idx];
                 const cols = row.querySelectorAll('td');
-                if (cols.length >= 4) {
+                if (cols.length >= 3) {
+                    const usernameDiv = cols[1]?.querySelector('div:last-child');
                     list.push({
                         rank: idx + 1,
-                        username: cols[1]?.textContent?.trim() || 'User',
-                        score: parseInt(cols[3]?.textContent?.replace(/,/g, '') || '0')
+                        username: usernameDiv?.textContent?.trim() || 'User',
+                        score: parseInt(cols[2]?.textContent?.replace(/,/g, '') || '0')
                     });
                 }
             }
