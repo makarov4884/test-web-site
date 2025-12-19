@@ -47,8 +47,8 @@ async function crawlBjStats(page: any, bjId: string) {
     try {
         await page.goto(`https://bcraping.kr/monitor/${bjId}`, { waitUntil: 'networkidle', timeout: 30000 });
 
-        // 데이터가 로딩될 때까지 대기 (스켈레톤 UI 이후)
-        await page.waitForSelector('div:has-text("누적 방송 시간")', { timeout: 10000 }).catch(() => { });
+        // 데이터가 로딩될 때까지 대기 (간단한 타임아웃)
+        await page.waitForTimeout(3000);
 
         // 데이터 추출 - XPath 기반
         const stats = await page.evaluate(() => {
