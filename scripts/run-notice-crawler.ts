@@ -51,7 +51,7 @@ async function crawlNotices() {
 
         const allNotices: any[] = [];
 
-        for (const streamer of streamers.slice(0, 5)) { // 테스트용으로 5명만
+        for (const streamer of streamers) { // 전체 스트리머
             console.log(`[Notice Crawler] Crawling ${streamer.name} (${streamer.bjId})...`);
 
             const context = await browser.newContext();
