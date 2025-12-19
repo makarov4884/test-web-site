@@ -110,23 +110,34 @@ async function startCrawler() {
                     const target = getText(7);
 
                     // 날짜 보정
-                    if (date && date.includes(':') && date.length < 10) {
+                    let dateStr = date;
+                    if (dateStr) {
                         const today = new Date();
-                        const y = today.getFullYear();
-                        const m = String(today.getMonth() + 1).padStart(2, '0');
-                        const d = String(today.getDate()).padStart(2, '0');
-                        date = `${y}-${m}-${d} ${date}`;
+                        if (!dateStr.startsWith('20')) {
+                            // "12-14 04:11:37" -> "2025-12-14 04:11:37"
+                            dateStr = `${today.getFullYear()}-${dateStr}`;
+                        }
+                    } else {
+                        dateStr = new Date().toISOString();
                     }
 
-                    if (date && user && count) {
+                    let parsedCount = parseInt(count.replace(/,/g, ''), 10);
+                    let finalTarget = target;
+
+                    // 2500개는 가위바위보 -> 미분류 처리
+                    if (parsedCount === 2500) {
+                        finalTarget = '';
+                    }
+
+                    if (user && count) {
                         results.push({
-                            messageId: `${date}-${user}-${count}`,
-                            createDate: date,
+                            messageId: `${dateStr}-${user}-${parsedCount}`,
+                            createDate: dateStr,
                             ballonUserName: user,
-                            ballonCount: parseInt(count.replace(/,/g, ''), 10),
-                            targetBjName: target,
+                            ballonCount: parsedCount,
+                            targetBjName: finalTarget,
                             message: msg,
-                            messageDate: date,
+                            messageDate: dateStr,
                             targetBjGroup: ''
                         });
                     }
@@ -166,20 +177,27 @@ function parseItem(item) {
     if (!kUser || !kCount) return null;
 
     let createDate = kDate ? item[kDate] : new Date().toISOString();
-    if (createDate && createDate.includes(':') && createDate.length < 10) {
+
+    // Simple date fix
+    if (createDate && !createDate.startsWith('20')) {
         const today = new Date();
-        createDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')} ${createDate}`;
+        createDate = `${today.getFullYear()}-${createDate}`;
     }
 
     const ballonCountRaw = item[kCount];
     const ballonCount = typeof ballonCountRaw === 'string' ? parseInt(ballonCountRaw.replace(/,/g, ''), 10) : ballonCountRaw;
+
+    let targetBjName = kBj ? item[kBj] : '';
+    if (ballonCount === 2500) {
+        targetBjName = '';
+    }
 
     return {
         messageId: `${createDate}-${item[kUser]}-${ballonCount}`,
         createDate,
         ballonUserName: item[kUser],
         ballonCount,
-        targetBjName: kBj ? item[kBj] : '',
+        targetBjName,
         message: kMsg ? item[kMsg] : '',
         messageDate: createDate,
         targetBjGroup: ''
@@ -194,7 +212,30 @@ function saveData(filePath, newItems) {
 
     const itemMap = new Map();
     existingItems.forEach(i => itemMap.set(i.messageId, i));
-    newItems.forEach(i => itemMap.set(i.messageId, i));
+
+    // Fuzzy Check & Merge
+    newItems.forEach(newItem => {
+        // 1. Exact ID check
+        if (itemMap.has(newItem.messageId)) {
+            // Update if needed? keep old usually better if we trust it
+            return;
+        }
+
+        // 2. Fuzzy check: Same User, Count, Message, and Time within 5 mins
+        const isDuplicate = existingItems.some(existing => {
+            return existing.ballonUserName === newItem.ballonUserName &&
+                existing.ballonCount === newItem.ballonCount &&
+                existing.message === newItem.message &&
+                Math.abs(new Date(existing.createDate).getTime() - new Date(newItem.createDate).getTime()) < 5 * 60 * 1000;
+        });
+
+        if (!isDuplicate) {
+            itemMap.set(newItem.messageId, newItem);
+            existingItems.push(newItem); // Update local array for next check
+        } else {
+            // console.log(`Skipped duplicate scan: ${newItem.messageId}`);
+        }
+    });
 
     const merged = Array.from(itemMap.values()).sort((a, b) => {
         return new Date(b.createDate).getTime() - new Date(a.createDate).getTime();
@@ -209,14 +250,7 @@ function saveData(filePath, newItems) {
         }, null, 2));
         console.log(`💾 Data Saved. Total: ${merged.length} (Latest: ${merged[0]?.createDate})`);
 
-        // Firestore Sync
-        try {
-            const { syncToFirestore } = require('./sync-firestore');
-            syncToFirestore(); // Fire and forget (optional: await)
-        } catch (e) {
-            console.log('⚠️ Firestore sync skipped (need setup)');
-        }
-
+        // Firestore sync logic removed or conditional
     } catch (e) { }
 }
 

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { db } from '@/lib/firebaseAdmin';
 
 export async function POST(request: Request) {
     try {
@@ -58,19 +57,6 @@ export async function POST(request: Request) {
                 }
                 return item;
             });
-        }
-
-        if (db) {
-            try {
-                // 전체 데이터를 Firestore에 업데이트 (비효율적이지만 Single Document 구조상 필요)
-                await db.collection('festival_data').doc('main_data').set({
-                    donations: jsonData.data,
-                    lastUpdated: new Date().toISOString()
-                }, { merge: true });
-                console.log('🔥 Check! Synced classification to Firestore');
-            } catch (e) {
-                console.error('Failed to sync to Firestore:', e);
-            }
         }
 
         if (!found) {

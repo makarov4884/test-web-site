@@ -306,7 +306,25 @@ export async function crawlNotices(onProgress?: (notices: Notice[]) => Promise<v
                                 allNotices.push(...extracted);
                                 console.log(`[Notice Crawler] Extracted ${extracted.length} items from ${url}`);
                             } else {
-                                console.log(`[Notice Crawler] 0 items extracted from ${url}`);
+                                const debugInfo = await page.evaluate(() => {
+                                    const bodyText = document.body.innerText;
+                                    let reason = 'Unknown';
+                                    if (bodyText.includes('서비스 이용이 정지된 방송국')) reason = 'Service Suspended';
+                                    else if (bodyText.includes('성인인증')) reason = 'Adult Authentication Required';
+                                    else if (bodyText.includes('로그인')) reason = 'Login Required';
+
+                                    return {
+                                        title: document.title,
+                                        reason,
+                                        bodyPreview: bodyText.slice(0, 100).replace(/\s+/g, ' ')
+                                    };
+                                });
+
+                                if (debugInfo.reason !== 'Unknown') {
+                                    console.warn(`[Notice Crawler] Skipped ${streamer.name} (${url}) - Reason: ${debugInfo.reason}`);
+                                } else {
+                                    console.log(`[Notice Crawler] 0 items extracted from ${url} (Title: ${debugInfo.title})`);
+                                }
                             }
 
                         } catch (err: any) {

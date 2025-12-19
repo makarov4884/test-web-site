@@ -110,13 +110,13 @@ export default function NoticePage() {
                 </div>
 
                 {/* Filter Tabs */}
-                <div className="bg-white rounded-lg shadow-sm mb-6 border border-gray-200">
-                    <div className="flex gap-0 overflow-x-auto border-b border-gray-200">
+                <div className="bg-white rounded-lg shadow-sm mb-6 border border-gray-200 p-6">
+                    <div className="flex flex-wrap gap-3 justify-center">
                         <button
                             onClick={() => setSelectedStreamer('all')}
-                            className={`px-6 py-3 font-medium whitespace-nowrap transition-all border-b-2 ${selectedStreamer === 'all'
-                                ? 'border-pink-500 text-pink-600 bg-pink-50'
-                                : 'border-transparent text-gray-600 hover:bg-gray-50'
+                            className={`px-5 py-2 rounded-full text-sm font-bold transition-all shadow-sm ${selectedStreamer === 'all'
+                                ? 'bg-pink-500 text-white border border-pink-600 shadow-md transform scale-105'
+                                : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 hover:border-pink-300'
                                 }`}
                         >
                             전체
@@ -125,9 +125,9 @@ export default function NoticePage() {
                             <button
                                 key={streamer.id}
                                 onClick={() => setSelectedStreamer(streamer.id)}
-                                className={`px-6 py-3 font-medium whitespace-nowrap transition-all border-b-2 ${selectedStreamer === streamer.id
-                                    ? 'border-pink-500 text-pink-600 bg-pink-50'
-                                    : 'border-transparent text-gray-600 hover:bg-gray-50'
+                                className={`px-5 py-2 rounded-full text-sm font-bold transition-all shadow-sm ${selectedStreamer === streamer.id
+                                    ? 'bg-pink-500 text-white border border-pink-600 shadow-md transform scale-105'
+                                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 hover:border-pink-300'
                                     }`}
                             >
                                 {streamer.name}

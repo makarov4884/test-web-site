@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# 1. 크롤러 백그라운드 실행
-echo "🕷️ Starting Crawler..."
-node scripts/festival-crawler.js &
+# 1. Start Next.js server in the background
+npm run build
+npm start &
 
-# 2. Next.js 웹 서버 실행 (포트 7860)
-echo "🌐 Starting Web Server..."
-npm start -- -p 7860 -H 0.0.0.0
+# 2. Wait for server to be ready (optional but good practice)
+sleep 10
+
+# 3. Start Crawler in the background
+node scripts/festival-crawler.js

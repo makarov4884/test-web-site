@@ -1,18 +1,26 @@
-# Playwright가 포함된 공식 이미지 사용 (브라우저 설치 번거로움 해결)
+# Playwright base image (includes browsers)
 FROM mcr.microsoft.com/playwright:v1.49.0-jammy
 
-# 작업 디렉토리 설정
 WORKDIR /app
 
-# 패키지 파일 복사 및 설치
+# Copy package files
 COPY package*.json ./
+
+# Install dependencies (ignoring scripts to avoid redundant browser download if possible, but safely running it is fine)
+# Setting PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 because base image has them
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN npm ci
 
-# 소스 코드 복사
+# Copy source code
 COPY . .
 
-# 프로덕션 환경 변수 설정
-ENV NODE_ENV=production
+# Build Next.js application
+RUN npm run build
 
-# 크롤러 실행 (웹 서버가 아닌 크롤러만 실행)
-CMD ["node", "scripts/festival-crawler.js"]
+# Expose port (Hugging Face uses 7860 by default, but Next.js defaults to 3000. 
+# We should configure Next.js or redirect. HF expects app on port 7860!)
+ENV PORT=7860
+EXPOSE 7860
+
+# Start the application
+CMD ["npm", "run", "start"]

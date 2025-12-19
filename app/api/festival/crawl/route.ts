@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { db } from '@/lib/firebaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,22 +21,6 @@ export async function GET() {
                 donations = json.data || [];
             } catch (e) {
                 console.error('Failed to read crawl_data.json:', e);
-            }
-        }
-
-        // Firestore 사용 시도
-        if (db) {
-            try {
-                const doc = await db.collection('festival_data').doc('main_data').get();
-                if (doc.exists) {
-                    const data = doc.data();
-                    if (data && data.donations) {
-                        donations = data.donations;
-                        console.log('🔥 Fetched data from Firestore');
-                    }
-                }
-            } catch (e) {
-                console.error('Failed to fetch from Firestore:', e);
             }
         }
 

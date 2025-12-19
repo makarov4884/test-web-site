@@ -137,8 +137,13 @@ export default function UnclassifiedPage() {
                                                         {donation.ballonUserName}
                                                     </span>
                                                     <span className="text-gray-400">/</span>
-                                                    <span className="text-yellow-600 font-black">
+                                                    <span className="text-yellow-600 font-black flex items-center gap-2">
                                                         {donation.ballonCount.toLocaleString()}개
+                                                        {Number(donation.ballonCount) === 2500 && (
+                                                            <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded border border-yellow-300 animate-pulse">
+                                                                ✌️ 가위바위보
+                                                            </span>
+                                                        )}
                                                     </span>
                                                 </div>
 

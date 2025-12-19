@@ -1,27 +1,25 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { format } from "date-fns";
+import fs from "fs";
+import path from "path";
 
 export interface UserSession {
     id: string;
     nickname?: string;
     profile_image?: string;
     isLoggedIn: boolean;
+    isAdmin?: boolean;
 }
 
-// In-memory verification codes store (for demo purposes, real app might use DB/Redis)
-// Key: BJ ID, Value: Verification Code
+// In-memory verification codes store (for demo purposes)
 const verificationCodes = new Map<string, string>();
 
 export async function generateVerificationCode(id: string): Promise<{ success: boolean; code?: string; message?: string }> {
     if (!id) return { success: false, message: "아이디를 입력해주세요." };
 
-    // Generate a random 6-character alphanumeric code
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
     verificationCodes.set(id, code);
-
-    // In a real app, you might want to expire this code after 10 mins
     setTimeout(() => verificationCodes.delete(id), 600000);
 
     return { success: true, code };
@@ -36,7 +34,6 @@ export async function verifyStationContent(id: string): Promise<{ success: boole
     try {
         console.log(`[Verification] Fetching station info for: ${id}`);
 
-        // Use Fetch instead of Puppeteer for much faster verification
         const response = await fetch(`https://bjapi.afreecatv.com/api/${id}/station`, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -50,18 +47,12 @@ export async function verifyStationContent(id: string): Promise<{ success: boole
         }
 
         const data = await response.json();
-
-        // Check relevant fields (Title, Name, Nickname, Profile Text)
         const stationTitle = data.station?.station_title || "";
         const stationName = data.station?.station_name || "";
         const userNick = data.station?.user_nick || "";
         const profileText = data.station?.display?.profile_text || "";
 
-        console.log(`[Verification] Checking code "${code}" in:`);
-        console.log(` - Title: "${stationTitle}"`);
-        console.log(` - Name: "${stationName}"`);
-        console.log(` - Nick: "${userNick}"`);
-        console.log(` - Profile: "${profileText}"`);
+        console.log(`[Verification] Checking code "${code}" in properties...`);
 
         if (stationTitle.includes(code) || stationName.includes(code) || userNick.includes(code) || profileText.includes(code)) {
             console.log(`[Verification] ✅ Code found!`);
@@ -69,7 +60,6 @@ export async function verifyStationContent(id: string): Promise<{ success: boole
             return { success: true };
         }
 
-        console.log(`[Verification] ❌ Code not found`);
         return {
             success: false,
             message: "방송국 '제목', '방송국명', '닉네임', 또는 '소개글(Profile)'에서 인증번호를 찾을 수 없습니다. 정확히 입력했는지 확인해주세요."
@@ -87,15 +77,12 @@ export async function verifyStationContent(id: string): Promise<{ success: boole
 async function createSession(id: string) {
     console.log(`[Auth Debug] Attempting to create session for: ${id}`);
     const cookieStore = await cookies();
-    // Encode ID to prevent ByteString error if user enters Korean characters
-    // Hugging Face Spaces runs in an iframe, so we need SameSite=None and Secure=true in production.
-    // In local development (HTTP), we need SameSite=Lax and Secure=false.
     const isProduction = process.env.NODE_ENV === 'production';
 
     cookieStore.set("session_user", encodeURIComponent(id), {
         httpOnly: true,
         secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax',
+        sameSite: isProduction ? 'none' : 'lax', // Important for iframe support in HF Spaces
         maxAge: 60 * 60 * 24 * 7, // 1 week
         path: "/",
     });
@@ -103,19 +90,12 @@ async function createSession(id: string) {
     verificationCodes.delete(id);
 }
 
-// Keep the old simulated login for backward compatibility or testing 'admin'
 export async function loginWithAuth(id: string, code: string): Promise<{ success: boolean; message?: string }> {
-    // ... same as before but maybe check if code matches the OTP map if we want to unify?
-    // For now, let's keep the "Mobile OTP simulation" as a separate mode if user wants.
-    // But the user asked for "SOOP TV OTP-like" which implies legitimate verification.
-
-    // If code is strictly 8 digits (numeric), treat as Mobile OTP Simulation
     if (/^\d{8}$/.test(code)) {
         const cookieStore = await cookies();
         cookieStore.set("session_user", encodeURIComponent(id), { httpOnly: true, path: '/' });
         return { success: true };
     }
-
     return { success: false, message: "유효하지 않은 인증번호입니다." };
 }
 
@@ -130,13 +110,28 @@ export async function getSession(): Promise<UserSession | null> {
     const userId = encodedId ? decodeURIComponent(encodedId) : undefined;
 
     if (userId) {
-        // Fetch nickname from bjapi
-        let nickname = userId; // Fallback to ID if API fails
+        let nickname = userId;
         let profile_image = undefined;
+        let isAdmin = false;
+
+        // Check Admin Status
+        try {
+            const adminPath = path.join(process.cwd(), 'public', 'admins.json');
+            if (fs.existsSync(adminPath)) {
+                const admins = JSON.parse(fs.readFileSync(adminPath, 'utf-8'));
+                if (Array.isArray(admins) && admins.includes(userId)) {
+                    isAdmin = true;
+                }
+            }
+        } catch (e) {
+            console.error('Error checking admin status', e);
+        }
+
+        // Fetch User Info
         try {
             const response = await fetch(`https://bjapi.afreecatv.com/api/${userId}/station`, {
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': 'Mozilla/5.0'
                 },
                 cache: 'no-store',
                 next: { revalidate: 0 }
@@ -151,7 +146,6 @@ export async function getSession(): Promise<UserSession | null> {
                 }
                 if (data.profile_image) {
                     profile_image = data.profile_image;
-                    // Ensure protocol is present
                     if (profile_image.startsWith("//")) {
                         profile_image = `https:${profile_image}`;
                     }
@@ -161,7 +155,7 @@ export async function getSession(): Promise<UserSession | null> {
             console.error('Failed to fetch nickname:', e);
         }
 
-        return { id: userId, nickname, profile_image, isLoggedIn: true };
+        return { id: userId, nickname, profile_image, isLoggedIn: true, isAdmin };
     }
     return null;
 }

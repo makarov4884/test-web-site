@@ -193,19 +193,19 @@ export default function AdminPage() {
                 </div>
 
                 {/* 스트리머 관리 섹션 */}
-                <div className="bg-white rounded-2xl shadow-xl p-6 border border-purple-100">
+                <div className="bg-white rounded-2xl shadow-xl p-6 border border-purple-100 mb-8">
                     <h2 className="text-2xl font-bold text-gray-800 mb-6">스트리머 관리</h2>
 
                     {/* 추가 폼 */}
                     <div className="flex gap-3 mb-6">
                         <input
-                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-black"
                             placeholder="BJ ID (예: pyh3646)"
                             value={newId}
                             onChange={(e) => setNewId(e.target.value)}
                         />
                         <input
-                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-black"
                             placeholder="이름 (선택)"
                             value={newName}
                             onChange={(e) => setNewName(e.target.value)}
@@ -219,7 +219,7 @@ export default function AdminPage() {
                     </div>
 
                     {/* 스트리머 목록 */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
                         {streamers.map((s) => (
                             <div
                                 key={s.id}
@@ -239,6 +239,108 @@ export default function AdminPage() {
                         ))}
                     </div>
                 </div>
+
+                <ManagersSection />
+            </div>
+        </div>
+    );
+}
+
+function ManagersSection() {
+    const [managers, setManagers] = useState<string[]>([]);
+    const [newManagerId, setNewManagerId] = useState("");
+
+    useEffect(() => {
+        fetchManagers();
+    }, []);
+
+    const fetchManagers = async () => {
+        try {
+            const res = await fetch('/api/admin/managers');
+            const data = await res.json();
+            if (data.success) {
+                setManagers(data.admins);
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const handleAddManager = async () => {
+        if (!newManagerId) return;
+        try {
+            const res = await fetch('/api/admin/managers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: newManagerId })
+            });
+            if (res.ok) {
+                setNewManagerId("");
+                fetchManagers();
+            }
+        } catch (error) {
+            alert("Failed to add manager");
+        }
+    };
+
+    const handleRemoveManager = async (id: string) => {
+        if (!confirm(`${id} 님을 관리자에서 삭제하시겠습니까?`)) return;
+        try {
+            const res = await fetch('/api/admin/managers', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+            if (res.ok) {
+                fetchManagers();
+            }
+        } catch (error) {
+            alert("Failed to remove manager");
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-2xl shadow-xl p-6 border border-blue-100">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                <span className="text-blue-600">🛡️</span> 관리자(Manager) 계정 관리
+            </h2>
+            <p className="text-gray-500 mb-4 text-sm">
+                여기에 등록된 ID는 <strong>홈페이지의 모든 기능(관리자 권한)</strong>을 사용할 수 있습니다.
+            </p>
+
+            <div className="flex gap-3 mb-6">
+                <input
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                    placeholder="SOOP BJ ID 입력"
+                    value={newManagerId}
+                    onChange={(e) => setNewManagerId(e.target.value)}
+                />
+                <button
+                    onClick={handleAddManager}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all shadow-lg flex items-center gap-2"
+                >
+                    <FaPlus /> 관리자 추가
+                </button>
+            </div>
+
+            <div className="space-y-2">
+                {managers.map((id) => (
+                    <div
+                        key={id}
+                        className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200"
+                    >
+                        <span className="font-semibold text-blue-900">{id}</span>
+                        <button
+                            onClick={() => handleRemoveManager(id)}
+                            className="text-red-500 hover:text-red-700 p-2"
+                        >
+                            <FaTrash />
+                        </button>
+                    </div>
+                ))}
+                {managers.length === 0 && (
+                    <p className="text-gray-400 text-center py-4">등록된 관리자가 없습니다.</p>
+                )}
             </div>
         </div>
     );
