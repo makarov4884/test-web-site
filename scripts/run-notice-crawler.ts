@@ -121,8 +121,8 @@ async function crawlNotices() {
             for (const notice of allNotices) {
                 const { error } = await supabase.from('notices').upsert({
                     id: notice.id,
-                    streamer_id: notice.streamerId,
-                    streamer_name: notice.streamerName,
+                    bj_id: notice.streamerId,
+                    bj_name: notice.streamerName,
                     title: notice.title,
                     date: notice.date,
                     url: notice.url,
