@@ -176,29 +176,35 @@ export default function NoticePage() {
                                     className="p-5 hover:bg-gray-50 cursor-pointer transition-colors"
                                 >
                                     <div className="flex items-start gap-4">
-                                        {/* Profile Image */}
-                                        <div className="shrink-0">
+                                        {/* Profile Image - 클릭 시 방송국으로 이동 */}
+                                        <a
+                                            href={`https://www.sooplive.co.kr/${notice.streamerId || notice.streamerName}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="shrink-0"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
                                             {notice.streamerId ? (
                                                 <>
                                                     <img
                                                         src={`https://profile.img.sooplive.co.kr/LOGO/${notice.streamerId.substring(0, 2)}/${notice.streamerId}/${notice.streamerId}.jpg`}
                                                         alt={notice.streamerName}
-                                                        className="w-12 h-12 rounded-full object-cover border border-gray-200"
+                                                        className="w-12 h-12 rounded-full object-cover border-2 border-gray-200 hover:border-pink-400 transition-colors cursor-pointer"
                                                         onError={(e) => {
                                                             e.currentTarget.style.display = 'none';
                                                             e.currentTarget.nextElementSibling?.classList.remove('hidden');
                                                         }}
                                                     />
-                                                    <div className="hidden w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold">
+                                                    <div className="hidden w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold hover:scale-110 transition-transform cursor-pointer">
                                                         {notice.streamerName.charAt(0)}
                                                     </div>
                                                 </>
                                             ) : (
-                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold">
+                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold hover:scale-110 transition-transform cursor-pointer">
                                                     {notice.streamerName?.charAt(0) || '?'}
                                                 </div>
                                             )}
-                                        </div>
+                                        </a>
 
                                         {/* Content */}
                                         <div className="flex-1 min-w-0">
@@ -206,7 +212,15 @@ export default function NoticePage() {
                                                 <span className="px-2 py-0.5 rounded text-xs font-bold bg-pink-100 text-pink-600">
                                                     공지
                                                 </span>
-                                                <span className="text-sm font-medium text-gray-700">{notice.streamerName}</span>
+                                                <a
+                                                    href={`https://www.sooplive.co.kr/${notice.streamerId || notice.streamerName}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-sm font-medium text-gray-700 hover:text-pink-600 hover:underline transition-colors"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    {notice.streamerName}
+                                                </a>
                                             </div>
                                             <h3 className="font-semibold text-gray-800 mb-1">
                                                 {notice.title}
