@@ -19,12 +19,11 @@ export async function GET(request: Request) {
         // 프론트엔드 포맷으로 변환
         const formattedNotices = (notices || []).map(n => ({
             id: n.id.toString(),
-            streamerId: n.bj_field,
+            streamerId: n.bj_name, // bj_name을 streamerId로 사용
             streamerName: n.bj_name,
             title: n.title,
             url: n.link,
-            date: n.date,
-            isFixed: n.is_fixed
+            date: n.date
         }));
 
         return NextResponse.json(formattedNotices);
