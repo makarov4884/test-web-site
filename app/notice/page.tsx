@@ -178,18 +178,26 @@ export default function NoticePage() {
                                     <div className="flex items-start gap-4">
                                         {/* Profile Image */}
                                         <div className="shrink-0">
-                                            <img
-                                                src={`https://profile.img.sooplive.co.kr/LOGO/${notice.streamerId.substring(0, 2)}/${notice.streamerId}/${notice.streamerId}.jpg`}
-                                                alt={notice.streamerName}
-                                                className="w-12 h-12 rounded-full object-cover border border-gray-200"
-                                                onError={(e) => {
-                                                    e.currentTarget.style.display = 'none';
-                                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                                }}
-                                            />
-                                            <div className="hidden w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold">
-                                                {notice.streamerName.charAt(0)}
-                                            </div>
+                                            {notice.streamerId ? (
+                                                <>
+                                                    <img
+                                                        src={`https://profile.img.sooplive.co.kr/LOGO/${notice.streamerId.substring(0, 2)}/${notice.streamerId}/${notice.streamerId}.jpg`}
+                                                        alt={notice.streamerName}
+                                                        className="w-12 h-12 rounded-full object-cover border border-gray-200"
+                                                        onError={(e) => {
+                                                            e.currentTarget.style.display = 'none';
+                                                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                                        }}
+                                                    />
+                                                    <div className="hidden w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold">
+                                                        {notice.streamerName.charAt(0)}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold">
+                                                    {notice.streamerName?.charAt(0) || '?'}
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Content */}
