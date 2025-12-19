@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "cross-env PLAYWRIGHT_BROWSERS_PATH=0 next dev",
+    "build": "cross-env PLAYWRIGHT_BROWSERS_PATH=0 next build",
+    "start": "cross-env PLAYWRIGHT_BROWSERS_PATH=0 next start",
     "lint": "eslint",
     "get-soop-cookies": "node scripts/get-soop-cookies.js",
-    "postinstall": "playwright install chromium"
+    "postinstall": "cross-env PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.89.0",
@@ -35,6 +35,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.8",
     "tailwindcss": "^4",
